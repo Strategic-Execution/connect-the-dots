@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect the Dots - Organisational Change Analysis</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --purple-dark: #4a154b;
+            --purple-mid: #7b2d8e;
+            --purple-light: #c39bd3;
+            --purple-bg: #f3e5f5;
+            --green-hl: #c8e6c9;
+            --red-hl: #ffcdd2;
+            --yellow-hl: #fff9c4;
+            --orange-hl: #ffe0b2;
+            --teal-hl: #b2dfdb;
+            --lilac-hl: #e1bee7;
+            --grey-bg: #f5f5f5;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--grey-bg); color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--purple-dark), var(--purple-mid));
+            color: #fff; padding: 14px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .header h1 { font-size: 1.3rem; }
+        .header .sub { font-size: 0.78rem; opacity: 0.85; margin-top: 2px; }
+
+        .upload-section {
+            display: flex; gap: 14px; padding: 14px 20px; background: #fff;
+            border-bottom: 2px solid var(--purple-light); flex-wrap: wrap; align-items: flex-end;
+        }
+
+        .upload-box { flex: 1; min-width: 200px; }
+
+        .upload-box label {
+            display: block; font-weight: 600; margin-bottom: 4px;
+            color: var(--purple-dark); font-size: 0.82rem;
+        }
+
+        .upload-box input[type="file"] {
+            width: 100%; padding: 7px; border: 2px dashed var(--purple-light);
+            border-radius: 5px; background: var(--purple-bg); cursor: pointer; font-size: 0.78rem;
+        }
+
+        .btn-compare {
+            padding: 9px 22px; background: var(--purple-mid); color: #fff;
+            border: none; border-radius: 5px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+        }
+
+        .btn-compare:hover { background: var(--purple-dark); }
+
+        .tabs {
+            display: flex; background: #fff; border-bottom: 2px solid #e0e0e0;
+            padding: 0 20px; overflow-x: auto;
+        }
+
+        .tab {
+            padding: 9px 14px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
+            border-bottom: 3px solid transparent; color: #888; white-space: nowrap;
+        }
+
+        .tab:hover { color: var(--purple-mid); }
+        .tab.active { color: var(--purple-dark); border-bottom-color: var(--purple-mid); }
+
+        .global-filter-bar {
+            display: none; align-items: center; gap: 10px; padding: 8px 20px;
+            background: linear-gradient(90deg, var(--purple-bg), #fff);
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .global-filter-bar.active { display: flex; }
+
+        .global-filter-bar label { font-weight: 700; font-size: 0.82rem; color: var(--purple-dark); white-space: nowrap; }
+
+        .global-filter-bar select {
+            padding: 6px 12px; border: 2px solid var(--purple-light); border-radius: 5px;
+            font-size: 0.82rem; font-weight: 600; color: var(--purple-dark);
+            background: #fff; min-width: 260px; cursor: pointer;
+        }
+
+        .global-filter-bar select:focus { outline: none; border-color: var(--purple-mid); }
+        .global-filter-bar .filter-indicator { font-size: 0.75rem; color: var(--purple-mid); font-weight: 600; display: none; }
+        .global-filter-bar .filter-indicator.active { display: inline; }
+
+        .global-filter-bar .clear-filter-btn {
+            padding: 4px 10px; border: 1px solid #ccc; border-radius: 3px;
+            background: #fff; cursor: pointer; font-size: 0.76rem; font-weight: 600; color: #888; display: none;
+        }
+
+        .global-filter-bar .clear-filter-btn.active { display: inline-block; }
+        .global-filter-bar .clear-filter-btn:hover { background: var(--red-hl); border-color: #f44336; color: #f44336; }
+
+        .tab-content { display: none; padding: 14px 20px; }
+        .tab-content.active { display: block; }
+
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
+
+        .card {
+            background: #fff; border-radius: 8px; padding: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.06); text-align: center;
+            border-left: 4px solid var(--purple-mid);
+        }
+
+        .card.green { border-left-color: #4caf50; } .card.red { border-left-color: #f44336; }
+        .card.yellow { border-left-color: #ff9800; } .card.teal { border-left-color: #009688; }
+        .card.lilac { border-left-color: #9c27b0; } .card.blue { border-left-color: #1565c0; }
+        .card .num { font-size: 1.6rem; font-weight: 700; color: var(--purple-dark); }
+        .card .lbl { font-size: 0.72rem; color: #666; margin-top: 2px; }
+
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+        .filter-bar select, .filter-bar input { padding: 5px 9px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.8rem; }
+        .filter-bar input { min-width: 200px; }
+
+        .tbl-wrap { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+
+        table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.76rem; }
+
+        th {
+            background: var(--purple-dark); color: #fff; padding: 7px 9px;
+            text-align: left; font-weight: 600; position: sticky; top: 0; z-index: 10; white-space: nowrap;
+        }
+
+        td { padding: 5px 9px; border-bottom: 1px solid #eee; vertical-align: top; }
+        tr:hover { background: #f9f3ff; }
+
+        .row-new { background: var(--green-hl) !important; }
+        .row-removed { background: var(--red-hl) !important; }
+        .row-moved { background: var(--orange-hl) !important; }
+        .row-title_changed { background: var(--teal-hl) !important; }
+        .row-name_changed { background: var(--lilac-hl) !important; }
+
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: 600; color: #fff; white-space: nowrap; }
+        .b-new { background: #4caf50; } .b-rem { background: #f44336; } .b-moved { background: #9c27b0; }
+        .b-title { background: #009688; } .b-name { background: #7b1fa2; }
+
+        .legend { display: flex; gap: 10px; padding: 6px 12px; background: #fff; border-radius: 5px; margin-bottom: 8px; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; }
+        .legend-color { width: 12px; height: 12px; border-radius: 2px; border: 1px solid #ddd; }
+
+        .chg { font-size: 0.66rem; color: #666; }
+        .chg .old { text-decoration: line-through; color: #f44336; }
+        .chg .new { color: #4caf50; font-weight: 600; }
+        .arr { color: #999; margin: 0 3px; }
+
+        .export-btn { padding: 5px 12px; background: #4caf50; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.76rem; }
+        .export-btn:hover { background: #388e3c; }
+
+        .loading { text-align: center; padding: 35px; color: #888; }
+        .spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid var(--purple-light); border-top-color: var(--purple-dark); border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #results { display: none; }
+        hr.sep { border: none; border-top: 2px solid var(--purple-light); margin: 16px 0; }
+
+        /* COLLAPSIBLE */
+        .section-hdr { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; padding: 4px 0; }
+        .section-hdr:hover { opacity: 0.8; }
+        .section-hdr .s-arrow { display: inline-block; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid currentColor; transition: transform 0.15s; }
+        .section-hdr.collapsed .s-arrow { transform: rotate(-90deg); }
+        .section-hdr .s-count { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.68rem; font-weight: 700; color: #fff; background: #999; }
+        .section-body { transition: max-height 0.2s ease; overflow: hidden; }
+        .section-body.collapsed { display: none; }
+
+        /* PERSON LOOKUP */
+        .lookup-bar { display: flex; gap: 8px; padding: 10px 0; align-items: center; flex-wrap: wrap; }
+        .lookup-bar input { flex: 1; min-width: 250px; padding: 8px 12px; border: 2px solid var(--purple-light); border-radius: 6px; font-size: 0.85rem; color: var(--purple-dark); }
+        .lookup-bar input:focus { outline: none; border-color: var(--purple-mid); }
+        .lookup-bar input::placeholder { color: #aaa; }
+        .lookup-results { margin-top: 8px; }
+        .lookup-person-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.04); }
+        .lookup-person-card h4 { font-size: 0.9rem; color: var(--purple-dark); margin-bottom: 6px; }
+        .lookup-person-card .lpc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+        .lookup-person-card .lpc-col h5 { font-size: 0.72rem; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .lookup-person-card .lpc-row { font-size: 0.78rem; color: #444; padding: 2px 0; display: flex; gap: 6px; }
+        .lookup-person-card .lpc-label { font-weight: 600; color: var(--purple-dark); min-width: 70px; }
+        .lookup-person-card .lpc-status { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 0.68rem; font-weight: 600; color: #fff; margin-top: 6px; }
+        .lookup-none { color: #999; font-size: 0.82rem; padding: 10px 0; }
+
+        /* NET CHANGE */
+        .net-tbl { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.76rem; margin-bottom: 12px; }
+        .net-tbl th { background: var(--purple-dark); color: #fff; padding: 6px 9px; text-align: left; font-weight: 600; font-size: 0.74rem; }
+        .net-tbl td { padding: 5px 9px; border-bottom: 1px solid #eee; }
+        .net-tbl tr:hover { background: #f9f3ff; }
+        .net-positive { color: #2e7d32; font-weight: 700; }
+        .net-negative { color: #c62828; font-weight: 700; }
+        .net-zero { color: #888; }
+
+        /* HEATMAP */
+        .hm-container { overflow-x: auto; }
+        .hm-grid { display: grid; gap: 4px; margin-top: 10px; }
+        .hm-corner { background: var(--purple-dark); color: #fff; font-weight: 700; font-size: 0.72rem; padding: 6px 8px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+        .hm-col-hdr { background: var(--purple-dark); color: #fff; font-weight: 600; font-size: 0.68rem; padding: 6px 4px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; line-height: 1.2; }
+        .hm-row-hdr { background: #fff; font-weight: 600; font-size: 0.72rem; padding: 6px 8px; border-radius: 4px; border: 1px solid #e0e0e0; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hm-cell { border-radius: 4px; padding: 4px; text-align: center; font-size: 0.72rem; font-weight: 700; cursor: default; display: flex; align-items: center; justify-content: center; min-height: 36px; transition: transform 0.1s, box-shadow 0.1s; border: 1px solid rgba(0,0,0,0.06); }
+        .hm-cell:hover { transform: scale(1.08); box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 2; position: relative; }
+        .hm-cell .hm-val { font-size: 0.8rem; }
+        .hm-scale { display: flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 0.7rem; color: #666; }
+        .hm-scale-bar { height: 12px; flex: 1; max-width: 300px; border-radius: 3px; background: linear-gradient(90deg, #e8f5e9, #fff9c4, #fff3e0, #ffccbc, #ffcdd2, #ef9a9a, #e57373); }
+        .hm-metric-bar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+        .hm-metric-btn { padding: 5px 12px; border: 2px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.76rem; font-weight: 600; color: #666; transition: all 0.15s; }
+        .hm-metric-btn:hover { border-color: var(--purple-mid); color: var(--purple-dark); }
+        .hm-metric-btn.active { background: var(--purple-bg); border-color: var(--purple-mid); color: var(--purple-dark); box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+
+        /* NWC (Non-Workforce Contractors) */
+        .nwc-bar-chart { display: flex; align-items: flex-end; gap: 4px; padding: 10px 0; }
+        .nwc-bar-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+        .nwc-bar { width: 100%; max-width: 60px; border-radius: 4px 4px 0 0; transition: height 0.3s; cursor: default; position: relative; }
+        .nwc-bar:hover { opacity: 0.85; }
+        .nwc-bar-label { font-size: 0.6rem; color: #555; text-align: center; margin-top: 4px; word-break: break-word; line-height: 1.15; max-width: 70px; }
+        .nwc-bar-val { font-size: 0.68rem; font-weight: 700; color: var(--purple-dark); margin-bottom: 2px; }
+        .nwc-top-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.76rem; margin-bottom: 12px; }
+        .nwc-top-table th { background: #1565c0; color: #fff; padding: 6px 9px; text-align: left; font-weight: 600; }
+        .nwc-top-table td { padding: 5px 9px; border-bottom: 1px solid #eee; }
+        .nwc-top-table tr:hover { background: #e3f2fd; }
+        .nwc-pct-bar { display: inline-block; height: 8px; border-radius: 4px; background: #1565c0; vertical-align: middle; margin-right: 6px; }
+        .nwc-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .nwc-summary-card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.06); border-left: 4px solid #1565c0; }
+        .nwc-summary-card .nsc-num { font-size: 1.4rem; font-weight: 700; color: #1565c0; }
+        .nwc-summary-card .nsc-lbl { font-size: 0.72rem; color: #666; margin-top: 2px; }
+        .nwc-net { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; margin-left: 6px; }
+
+        /* LANDING */
+        .landing { padding: 20px; }
+        .landing-hero { text-align: center; padding: 30px 20px; background: linear-gradient(135deg, var(--purple-dark), var(--purple-mid)); border-radius: 12px; color: #fff; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(74,21,75,0.25); }
+        .landing-hero .hero-icon { font-size: 3rem; margin-bottom: 8px; }
+        .landing-hero h2 { font-size: 1.5rem; margin-bottom: 4px; }
+        .landing-hero p { font-size: 0.88rem; opacity: 0.9; }
+        .landing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .landing-grid .landing-card.full-width { grid-column: 1 / -1; }
+        .landing-card { background: #fff; border-radius: 10px; padding: 20px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid var(--purple-mid); }
+        .landing-card h3 { font-size: 0.95rem; color: var(--purple-dark); margin-bottom: 8px; }
+        .landing-card p, .landing-card li { font-size: 0.82rem; color: #555; line-height: 1.65; }
+        .landing-card ol, .landing-card ul { padding-left: 20px; margin-top: 6px; }
+        .landing-card ol li, .landing-card ul li { margin-bottom: 6px; }
+        .landing-card a { color: var(--purple-mid); font-weight: 600; text-decoration: none; }
+        .landing-card a:hover { text-decoration: underline; color: var(--purple-dark); }
+        .landing-card .sp-link { display: inline-flex; align-items: center; gap: 6px; background: var(--purple-bg); padding: 8px 14px; border-radius: 6px; margin-top: 8px; border: 1px solid var(--purple-light); font-size: 0.82rem; font-weight: 600; color: var(--purple-dark); text-decoration: none; transition: background 0.15s; }
+        .landing-card .sp-link:hover { background: #e1bee7; text-decoration: none; }
+        .landing-themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .landing-themes .lt-item { text-align: center; padding: 8px 6px; border-radius: 6px; background: #fafafa; border: 1px solid #eee; font-size: 0.75rem; color: #555; }
+        .landing-themes .lt-item .lt-icon { font-size: 1.2rem; display: block; margin-bottom: 2px; }
+        .landing-logic-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.78rem; }
+        .landing-logic-table th { background: var(--purple-dark); color: #fff; padding: 6px 10px; text-align: left; font-weight: 600; font-size: 0.75rem; }
+        .landing-logic-table td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 0.78rem; color: #444; }
+        .landing-logic-table tr:hover { background: #f9f3ff; }
+        .landing-logic-table .lt-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 0.68rem; font-weight: 600; color: #fff; white-space: nowrap; }
+        .landing-field-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin-top: 8px; font-size: 0.78rem; }
+        .landing-field-grid .fg-label { font-weight: 600; color: var(--purple-dark); padding: 3px 0; }
+        .landing-field-grid .fg-value { color: #555; padding: 3px 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.75rem; }
+        .landing-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--purple-mid); color: #fff; font-size: 0.68rem; font-weight: 700; margin-right: 6px; flex-shrink: 0; }
+        .landing-step-list { list-style: none; padding: 0; margin-top: 8px; }
+        .landing-step-list li { display: flex; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.78rem; color: #444; }
+        .landing-step-list li:last-child { border-bottom: none; }
+
+        @media (max-width: 900px) {
+            .upload-section { flex-direction: column; }
+            .landing-grid { grid-template-columns: 1fr; }
+            .landing-themes { grid-template-columns: repeat(2, 1fr); }
+            .lookup-person-card .lpc-grid { grid-template-columns: 1fr; }
+        }
+
+        /* CHART / CANVAS */
+        .cv-toolbar { display: flex; gap: 5px; align-items: center; padding: 5px 8px; background: #fff; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+        .cv-toolbar button { padding: 4px 10px; border: 1px solid #ccc; border-radius: 3px; background: #fff; cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #555; user-select: none; }
+        .cv-toolbar button:hover { background: var(--purple-bg); border-color: var(--purple-mid); color: var(--purple-dark); }
+        .cv-toolbar button.toggle-active { background: var(--purple-bg); border-color: var(--purple-mid); color: var(--purple-dark); box-shadow: inset 0 1px 3px rgba(0,0,0,0.15); }
+        .cv-toolbar .zlbl { font-size: 0.76rem; color: #555; min-width: 42px; text-align: center; font-weight: 600; }
+        .cv-toolbar .tsep { width: 1px; height: 20px; background: #ddd; }
+        .cv-toolbar select, .cv-toolbar input { padding: 4px 7px; border: 1px solid #ccc; border-radius: 3px; font-size: 0.78rem; }
+        .cv-toolbar input { min-width: 130px; }
+        .cv-viewport { width: 100%; height: 78vh; overflow-y: auto; overflow-x: hidden; border: 1px solid #ddd; border-radius: 5px; background: #fafafa; }
+        .cv-inner { padding: 10px; width: 100%; font-size: 10px; }
+        .key-box { display: flex; gap: 12px; padding: 5px 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 5px; flex-wrap: wrap; }
+        .key-item { display: flex; align-items: center; gap: 3px; font-size: 0.68rem; }
+        .key-sw { width: 18px; height: 10px; border-radius: 2px; border: 2px solid; }
+
+        .ceo-banner { background: var(--purple-dark); color: #fff; border: 2px solid var(--purple-mid); border-radius: 0.5em; padding: 0.8em 1.6em; text-align: center; margin-bottom: 1em; cursor: pointer; }
+        .ceo-banner .nt { font-weight: 700; font-size: 1.2em; } .ceo-banner .np { font-size: 1em; color: rgba(255,255,255,0.85); }
+        .ceo-banner.hl-new { border-color: #4caf50; } .ceo-banner.hl-removed { border-color: #f44336; opacity: 0.6; } .ceo-banner.hl-changed { border-color: #ff9800; }
+        .div-columns { display: flex; flex-wrap: wrap; gap: 0.6em; align-items: flex-start; }
+        .div-col { width: 22em; flex-shrink: 0; flex-grow: 0; }
+        .div-col-hdr { background: var(--purple-mid); color: #fff; border-radius: 0.4em; padding: 0.5em 0.6em; text-align: center; margin-bottom: 0.4em; border: 2px solid var(--purple-mid); cursor: pointer; transition: opacity 0.15s; }
+        .div-col-hdr:hover { opacity: 0.85; }
+        .div-col-hdr .nt { font-weight: 700; font-size: 0.85em; line-height: 1.25; } .div-col-hdr .np { font-size: 0.7em; color: rgba(255,255,255,0.85); line-height: 1.2; }
+        .div-col-hdr.hl-new { border-color: #4caf50; } .div-col-hdr.hl-removed { border-color: #f44336; opacity: 0.6; } .div-col-hdr.hl-changed { border-color: #ff9800; }
+        .egm-bu-box { border: 1px solid #d1c4e9; border-radius: 0.3em; padding: 0.4em 0.5em; text-align: center; background: #fff; margin-bottom: 0.2em; cursor: pointer; transition: box-shadow 0.15s; }
+        .egm-bu-box:hover { box-shadow: 0 0 0 2px var(--purple-light); }
+        .egm-bu-box .nt { font-weight: 600; font-size: 0.75em; color: #333; line-height: 1.2; } .egm-bu-box .np { font-size: 0.65em; color: #666; line-height: 1.15; }
+        .egm-bu-box.hl-new { border-color: #4caf50; background: #e8f5e9; } .egm-bu-box.hl-removed { border-color: #f44336; background: #ffebee; opacity: 0.6; } .egm-bu-box.hl-changed { border-color: #ff9800; background: #fff8e1; }
+        .egm-box { background: #f0f0f0; border: 1px solid #ccc; border-radius: 0.3em; padding: 0.3em 0.4em; margin-bottom: 0.4em; }
+        .egm-box-hdr { background: #e0e0e0; border-radius: 0.2em; padding: 0.3em 0.5em; text-align: center; margin-bottom: 0.3em; border: 1px solid #bbb; cursor: pointer; transition: box-shadow 0.15s; }
+        .egm-box-hdr:hover { box-shadow: 0 0 0 2px var(--purple-light); }
+        .egm-box-hdr .nt { font-weight: 700; font-size: 0.75em; color: #333; line-height: 1.2; } .egm-box-hdr .np { font-size: 0.65em; color: #555; line-height: 1.15; }
+        .egm-box-hdr.hl-new { border-color: #4caf50; background: #e8f5e9; } .egm-box-hdr.hl-removed { border-color: #f44336; background: #ffebee; opacity: 0.6; } .egm-box-hdr.hl-changed { border-color: #ff9800; background: #fff8e1; }
+        .prac-grid { display: flex; flex-wrap: wrap; gap: 0.2em; align-items: flex-start; }
+        .prac-box { width: 10em; flex-shrink: 0; border: 1px solid #ddd; border-radius: 0.2em; padding: 0.2em 0.3em; text-align: center; background: #fff; cursor: pointer; transition: box-shadow 0.15s; }
+        .prac-box:hover { box-shadow: 0 0 0 2px var(--purple-light); }
+        .prac-box .nt { font-weight: 600; font-size: 0.65em; color: #333; line-height: 1.2; } .prac-box .np { font-size: 0.55em; color: #666; line-height: 1.15; }
+        .prac-box.hl-new { border-color: #4caf50; background: #e8f5e9; } .prac-box.hl-removed { border-color: #f44336; background: #ffebee; opacity: 0.6; } .prac-box.hl-changed { border-color: #ff9800; background: #fff8e1; }
+        .hide-changes .hl-removed { display: none !important; }
+        .hide-changes .hl-new.div-col-hdr, .hide-changes .hl-changed.div-col-hdr { border-color: var(--purple-mid) !important; opacity: 1 !important; }
+        .hide-changes .hl-new.egm-bu-box, .hide-changes .hl-changed.egm-bu-box { border-color: #d1c4e9 !important; background: #fff !important; opacity: 1 !important; }
+        .hide-changes .hl-new.egm-box-hdr, .hide-changes .hl-changed.egm-box-hdr { border-color: #bbb !important; background: #e0e0e0 !important; opacity: 1 !important; }
+        .hide-changes .hl-new.prac-box, .hide-changes .hl-changed.prac-box { border-color: #ddd !important; background: #fff !important; opacity: 1 !important; }
+        .hide-changes .ceo-banner.hl-new, .hide-changes .ceo-banner.hl-changed { border-color: var(--purple-mid) !important; opacity: 1 !important; }
+
+        /* MODAL */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-box { background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); max-width: 700px; width: 92%; max-height: 85vh; overflow-y: auto; padding: 0; animation: modalIn 0.2s ease-out; }
+        @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-header { background: var(--purple-dark); color: #fff; padding: 14px 20px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-size: 1rem; font-weight: 700; }
+        .modal-close { background: none; border: none; color: #fff; font-size: 1.4rem; cursor: pointer; padding: 0 4px; opacity: 0.8; }
+        .modal-close:hover { opacity: 1; }
+        .modal-body { padding: 16px 20px; }
+        .modal-section { margin-bottom: 14px; }
+        .modal-section h4 { font-size: 0.82rem; color: var(--purple-dark); margin-bottom: 4px; border-bottom: 1px solid #eee; padding-bottom: 3px; }
+        .modal-section p, .modal-section li { font-size: 0.78rem; color: #444; line-height: 1.5; }
+        .modal-section ul { list-style: none; padding: 0; }
+        .modal-section ul li { padding: 2px 0 2px 12px; position: relative; }
+        .modal-section ul li::before { content: '•'; position: absolute; left: 0; color: var(--purple-mid); }
+        .modal-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; color: #fff; margin-bottom: 4px; }
+        .modal-badge.st-new { background: #4caf50; } .modal-badge.st-removed { background: #f44336; } .modal-badge.st-changed { background: #ff9800; } .modal-badge.st-unchanged { background: #9e9e9e; } .modal-badge.st-title_changed { background: #009688; }
+        .modal-change-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; padding: 3px 0; }
+        .modal-change-old { text-decoration: line-through; color: #f44336; } .modal-change-arrow { color: #999; } .modal-change-new { color: #4caf50; font-weight: 600; }
+        .modal-people-count { display: inline-block; background: var(--purple-bg); color: var(--purple-dark); padding: 2px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; }
+        .modal-job-title { font-size: 0.72rem; color: #888; font-style: italic; }
+        .modal-tree { padding: 0; margin: 0; }
+        .modal-tree .tree-node { border-left: 2px solid #e0e0e0; margin-left: 8px; padding-left: 12px; margin-bottom: 4px; }
+        .modal-tree .tree-node:last-child { border-left-color: transparent; }
+        .modal-tree .tree-label { font-size: 0.78rem; font-weight: 600; color: #333; padding: 3px 8px; border-radius: 4px; display: inline-block; margin-bottom: 2px; border-left: 3px solid var(--purple-mid); background: #fafafa; }
+        .modal-tree .tree-label.tl-dept { border-left-color: #7b2d8e; background: #f9f0fc; }
+        .modal-tree .tree-label.tl-team { border-left-color: #9e9e9e; background: #f5f5f5; }
+        .modal-tree .tree-person { font-size: 0.75rem; padding: 1px 0 1px 10px; position: relative; line-height: 1.5; }
+        .modal-tree .tree-person::before { content: '•'; position: absolute; left: 0; color: var(--purple-mid); }
+        .modal-tree .tree-person.tp-new { color: #2e7d32; background: #e8f5e9; border-radius: 3px; padding-right: 4px; }
+        .modal-tree .tree-person.tp-removed { color: #c62828; text-decoration: line-through; background: #ffebee; border-radius: 3px; padding-right: 4px; }
+        .modal-tree .tree-person.tp-moved { color: #e65100; background: #fff3e0; border-radius: 3px; padding-right: 4px; }
+        .modal-tree .tree-person.tp-title_changed { color: #00695c; background: #e0f2f1; border-radius: 3px; padding-right: 4px; }
+        .modal-tree .tree-person.tp-name_changed { color: #6a1b9a; background: #f3e5f5; border-radius: 3px; padding-right: 4px; }
+        .modal-tree .tree-person.tp-new::before { color: #4caf50; } .modal-tree .tree-person.tp-removed::before { color: #f44336; } .modal-tree .tree-person.tp-moved::before { color: #ff9800; } .modal-tree .tree-person.tp-title_changed::before { color: #009688; } .modal-tree .tree-person.tp-name_changed::before { color: #9c27b0; }
+        .modal-tree .tp-badge { display: inline-block; padding: 1px 5px; border-radius: 6px; font-size: 0.58rem; font-weight: 700; color: #fff; margin-left: 4px; vertical-align: middle; }
+        .modal-tree .tp-badge.tpb-new { background: #4caf50; } .modal-tree .tp-badge.tpb-removed { background: #f44336; } .modal-tree .tp-badge.tpb-moved { background: #9c27b0; } .modal-tree .tp-badge.tpb-title_changed { background: #009688; } .modal-tree .tp-badge.tpb-name_changed { background: #7b1fa2; }
+        .modal-tree-legend { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; margin-bottom: 6px; font-size: 0.68rem; }
+        .modal-tree-legend span { display: inline-flex; align-items: center; gap: 3px; }
+        .modal-tree-legend .ml-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+        @media (max-width: 900px) {
+            .upload-section { flex-direction: column; }
+            .landing-grid { grid-template-columns: 1fr; }
+            .landing-themes { grid-template-columns: repeat(2, 1fr); }
+            .lookup-person-card .lpc-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1>🔗 Connect the Dots</h1>
+        <div class="sub">Organisational Change Analysis</div>
+    </div>
+    <div style="font-size: 0.7rem; opacity: 0.7;">v32.0</div>
+</div>
+
+<div class="upload-section">
+    <div class="upload-box">
+        <label>📁 Old File (Baseline)</label>
+        <input type="file" id="oldFile" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="upload-box">
+        <label>📁 New File (Current)</label>
+        <input type="file" id="newFile" accept=".xlsx,.xls,.csv">
+    </div>
+    <button class="btn-compare" onclick="run()">🔍 Compare Files</button>
+</div>
+
+<div id="loader" class="loading" style="display: none;">
+    <span class="spinner"></span> Analysing…
+</div>
+
+<div id="results">
+    <div class="tabs">
+        <div class="tab active" data-t="summary" onclick="switchTab('summary')">📋 Summary</div>
+        <div class="tab" data-t="lookup" onclick="switchTab('lookup')">🔎 Person Lookup</div>
+        <div class="tab" data-t="heatmap" onclick="switchTab('heatmap')">🔥 Heatmap</div>
+        <div class="tab" data-t="nwc" onclick="switchTab('nwc')">👷 Contractors</div>
+        <div class="tab" data-t="cc" onclick="switchTab('cc')">🌍 Corporate Citizenship</div>
+        <div class="tab" data-t="si" onclick="switchTab('si')">🎯 Strategic Intent</div>
+        <div class="tab" data-t="sd" onclick="switchTab('sd')">📈 Strategic Development</div>
+        <div class="tab" data-t="pr" onclick="switchTab('pr')">⚙️ Practice</div>
+        <div class="tab" data-t="sv" onclick="switchTab('sv')">🤝 Service</div>
+        <div class="tab" data-t="qu" onclick="switchTab('qu')">✅ Quality</div>
+        <div class="tab" data-t="all" onclick="switchTab('all')">🔄 All Changes</div>
+        <div class="tab" data-t="egm" onclick="switchTab('egm')">🏢 BU – CE &amp; EGM</div>
+        <div class="tab" data-t="div" onclick="switchTab('div')">🏗️ Division EGMs &amp; EMs</div>
+    </div>
+
+    <div class="global-filter-bar" id="globalFilterBar">
+        <label>📁 Division Filter:</label>
+        <select id="globalDivFilter" onchange="applyGlobalFilter()">
+            <option value="">All Divisions</option>
+        </select>
+        <span class="filter-indicator" id="filterIndicator">⚡ Filtered</span>
+        <button class="clear-filter-btn" id="clearFilterBtn" onclick="clearGlobalFilter()">✕ Clear Filter</button>
+    </div>
+
+    <div class="tab-content active" id="t-summary"></div>
+    <div class="tab-content" id="t-lookup"></div>
+    <div class="tab-content" id="t-heatmap"></div>
+    <div class="tab-content" id="t-nwc"></div>
+    <div class="tab-content" id="t-cc"></div>
+    <div class="tab-content" id="t-si"></div>
+    <div class="tab-content" id="t-sd"></div>
+    <div class="tab-content" id="t-pr"></div>
+    <div class="tab-content" id="t-sv"></div>
+    <div class="tab-content" id="t-qu"></div>
+    <div class="tab-content" id="t-all"></div>
+    <div class="tab-content" id="t-egm"></div>
+    <div class="tab-content" id="t-div"></div>
+</div>
+
+<div id="empty" class="landing">
+    <div class="landing-hero">
+        <div class="hero-icon">🔗</div>
+        <h2>Connect the Dots</h2>
+        <p>Organisational Change Analysis</p>
+    </div>
+    <div class="landing-grid">
+        <div class="landing-card full-width">
+            <h3>📖 What is this tool?</h3>
+            <p>Connect the Dots compares two weekly employee listing snapshots and automatically identifies every organisational change between them. Upload two files above to get started.</p>
+        </div>
+        <div class="landing-card" style="border-left-color: #ff9800;">
+            <h3>📥 Step 1 — Download Your Files</h3>
+            <p>Go to the <b>Group People, Performance &amp; Reputation</b> SharePoint site and download two W001-Employee-Listing CSV files.</p>
+            <a class="sp-link" href="https://iagau.sharepoint.com/sites/Infohub-EOPNC/Employee%20Central%20Reports/Forms/AllItems.aspx?csf=1&web=1&e=O6ydL4&cid=4f048ddf%2Da39d%2D4d8d%2D81c7%2D23424361d892&FolderCTID=0x0120002D1DA12A05A8CB43ACD05286F645C67A&id=%2Fsites%2FInfohub%2DEOPNC%2FEmployee%20Central%20Reports%2F1%2EWeekly%2FW001%2DEmployee%2DListing" target="_blank" rel="noopener">📂 Open W001-Employee-Listing on SharePoint →</a>
+        </div>
+        <div class="landing-card" style="border-left-color: #4caf50;">
+            <h3>📊 Step 2 — Upload &amp; Compare</h3>
+            <ol>
+                <li>Upload the <b>older</b> file as the <b>Old File (Baseline)</b></li>
+                <li>Upload the <b>newer</b> file as the <b>New File (Current)</b></li>
+                <li>Click <b>🔍 Compare Files</b></li>
+            </ol>
+        </div>
+        <div class="landing-card full-width" style="border-left-color: #795548;">
+            <h3>💡 New in v32</h3>
+            <ul>
+                <li><b>👷 Non-Workforce Contractors</b> — new tab showing contractor concentration by division, top service partners, and position breakdown</li>
+                <li><b>Clearer scope labels</b> — summary now explains in-scope (Directors, Staff, Workforce Contractors, Casuals) vs out-of-scope (Non-Workforce Contractors)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 id="modalTitle">Details</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+    </div>
+</div>
+
+<script>
+var THEMES = ['Corporate Citizenship', 'Strategic Intent', 'Strategic Development', 'Practice', 'Service', 'Quality'];
+var THEME_TAB_MAP = { 'Corporate Citizenship': 'cc', 'Strategic Intent': 'si', 'Strategic Development': 'sd', 'Practice': 'pr', 'Service': 'sv', 'Quality': 'qu' };
+var THEME_ICONS = { 'Corporate Citizenship': '🌍', 'Strategic Intent': '🎯', 'Strategic Development': '📈', 'Practice': '⚙️', 'Service': '🤝', 'Quality': '✅' };
+var THEME_COLORS = { 'Corporate Citizenship': '#795548', 'Strategic Intent': '#e91e63', 'Strategic Development': '#3f51b5', 'Practice': '#009688', 'Service': '#ff9800', 'Quality': '#607d8b' };
+
+var COLS = ['business_unit_name', 'division_name', 'department_name', 'team_name', 'full_name', 'theme_of_work'];
+var ALL_COLS = COLS.concat(['job_title']);
+// Extended columns for NWC tab
+var NWC_COLS = ['business_unit_name', 'division_name', 'department_name', 'team_name', 'full_name', 'theme_of_work', 'job_title', 'category', 'position_description', 'external_service_partner'];
+var DISPLAY_LABELS = { business_unit_name: 'Division', division_name: 'Business Unit', department_name: 'Department', team_name: 'Team', full_name: 'Full Name', theme_of_work: 'Theme of Work', job_title: 'Job Title', category: 'Category', position_description: 'Position Description', external_service_partner: 'Service Partner' };
+
+var PREFERRED_ORDER = ['Retail Insurance Australia', 'Intermediated Insurance Australia', 'New Zealand', 'New Zealand Division', 'Legal & Company Secretariat', 'Legal and Company Secretariat', 'People, Performance & Reputation', 'Group People, Performance & Reputation', 'Group Risk', 'OCEO and GLT Operations', 'OCEO & GLT Operations', 'Finance', 'Technology & Operations', 'Technology and Operations'];
+var EXCLUDE_NAMES = ['insurance australia group', 'iag'];
+var BASE_FONT_SIZE = 10;
+
+var OLD_DATA = [], NEW_DATA = [], OLD_RAW = [], NEW_RAW = [], COMPARISON = null, canvasZoomLevels = {}, ACTIVE_DIV_FILTER = '', HEATMAP_METRIC = 'total';
+
+function getDivSortKey(d) { var l = d.toLowerCase().trim(); for (var i = 0; i < PREFERRED_ORDER.length; i++) { var p = PREFERRED_ORDER[i].toLowerCase(); if (l === p || l.indexOf(p) !== -1 || p.indexOf(l) !== -1) return ('0' + i).slice(-2) + '_' + d; } return '99_' + d; }
+function shouldExclude(d) { var l = d.toLowerCase().trim(); for (var i = 0; i < EXCLUDE_NAMES.length; i++) { if (l === EXCLUDE_NAMES[i] || l.indexOf(EXCLUDE_NAMES[i]) !== -1) return true; } return false; }
+function sortDivNames(names) { return names.filter(function (d) { return !shouldExclude(d); }).sort(function (a, b) { return getDivSortKey(a).localeCompare(getDivSortKey(b)); }); }
+
+function norm(val) { if (val == null) return ''; if (val instanceof Date) return val.toISOString().split('T')[0]; return String(val).trim(); }
+
+function readFile(file) {
+    return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                var wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+                var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+                resolve(rows.map(function (row) {
+                    var obj = {};
+                    NWC_COLS.forEach(function (col) { obj[col] = norm(row[col]); });
+                    return obj;
+                }));
+            } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsBinaryString(file);
+    });
+}
+
+function isRelevantTheme(row) { return THEMES.indexOf(row.theme_of_work) !== -1; }
+function isNWC(row) { return (row.category || '').toLowerCase() === 'non workforce contractor' || (row.category || '').toLowerCase() === 'non-workforce contractor' || (row.category || '').toLowerCase() === 'non workforce contractors' || (row.category || '').toLowerCase() === 'non-workforce contractors'; }
+
+function rowKey(row) { return COLS.concat(['job_title']).map(function (c) { return row[c]; }).join('|||'); }
+function positionKey(row) { return COLS.map(function (c) { return row[c]; }).join('|||'); }
+function positionNoPersonKey(row) { return [row.business_unit_name, row.division_name, row.department_name, row.team_name, row.theme_of_work].join('|||'); }
+function positionWithTitleKey(row) { return [row.business_unit_name, row.division_name, row.department_name, row.team_name, row.theme_of_work, row.job_title].join('|||'); }
+function personThemeKey(row) { return row.full_name + '|||' + row.theme_of_work; }
+function personNameKey(row) { return row.full_name; }
+
+function getJobTitle(data, fullName) { if (!fullName) return ''; for (var i = 0; i < data.length; i++) { if (data[i].full_name === fullName && data[i].job_title) return data[i].job_title; } return ''; }
+function getJobTitleInContext(data, fullName, divName, buName) { if (!fullName) return ''; for (var i = 0; i < data.length; i++) { if (data[i].full_name === fullName && data[i].business_unit_name === divName && (!buName || data[i].division_name === buName) && data[i].job_title) return data[i].job_title; } return getJobTitle(data, fullName); }
+
+function getAllDivisions() { var divs = {}; NEW_DATA.concat(OLD_DATA).forEach(function (r) { if (r.business_unit_name && !shouldExclude(r.business_unit_name)) divs[r.business_unit_name] = true; }); return sortDivNames(Object.keys(divs)); }
+
+function populateGlobalFilter() { var sel = document.getElementById('globalDivFilter'), divs = getAllDivisions(); sel.innerHTML = '<option value="">All Divisions (' + divs.length + ')</option>'; divs.forEach(function (d) { sel.innerHTML += '<option value="' + d + '">' + d + '</option>'; }); document.getElementById('globalFilterBar').classList.add('active'); }
+
+function applyGlobalFilter() { ACTIVE_DIV_FILTER = document.getElementById('globalDivFilter').value; var ind = document.getElementById('filterIndicator'), btn = document.getElementById('clearFilterBtn'); if (ACTIVE_DIV_FILTER) { ind.classList.add('active'); btn.classList.add('active'); } else { ind.classList.remove('active'); btn.classList.remove('active'); } reRunComparison(); }
+
+function clearGlobalFilter() { document.getElementById('globalDivFilter').value = ''; ACTIVE_DIV_FILTER = ''; document.getElementById('filterIndicator').classList.remove('active'); document.getElementById('clearFilterBtn').classList.remove('active'); reRunComparison(); }
+
+function getFilteredData(data) { if (!ACTIVE_DIV_FILTER) return data; return data.filter(function (r) { return r.business_unit_name === ACTIVE_DIV_FILTER; }); }
+
+function reRunComparison() { COMPARISON = compareData(getFilteredData(OLD_DATA), getFilteredData(NEW_DATA)); renderEverything(COMPARISON); }
+
+/* COLLAPSIBLE */
+function sectionHtml(id, title, color, count, content) {
+    return '<div class="section-hdr" onclick="toggleSection(\'' + id + '\')" style="color:' + color + '">' +
+        '<span class="s-arrow"></span><h3 style="margin:0;font-size:0.95rem">' + title + '</h3>' +
+        '<span class="s-count" style="background:' + color + '">' + count + '</span></div>' +
+        '<div class="section-body" id="' + id + '">' + content + '</div>';
+}
+
+function toggleSection(id) {
+    var body = document.getElementById(id), hdr = body.previousElementSibling;
+    if (body.classList.contains('collapsed')) { body.classList.remove('collapsed'); hdr.classList.remove('collapsed'); }
+    else { body.classList.add('collapsed'); hdr.classList.add('collapsed'); }
+}
+
+// END OF PART 1
+/* ================================================================
+   COMPARISON ENGINE v32
+   ================================================================ */
+
+function compareData(oldRows, newRows) {
+    var oldFiltered = oldRows.filter(isRelevantTheme);
+    var newFiltered = newRows.filter(isRelevantTheme);
+    var oldKeySet = new Set(oldFiltered.map(rowKey));
+    var newKeySet = new Set(newFiltered.map(rowKey));
+    var oldPosMap = new Map(), oldPersThemeMap = new Map(), oldPersNameMap = new Map();
+
+    oldFiltered.forEach(function (r) {
+        var pk = positionKey(r); if (!oldPosMap.has(pk)) oldPosMap.set(pk, []); oldPosMap.get(pk).push(r);
+        var ptk = personThemeKey(r); if (!oldPersThemeMap.has(ptk)) oldPersThemeMap.set(ptk, []); oldPersThemeMap.get(ptk).push(r);
+        var pnk = personNameKey(r); if (!oldPersNameMap.has(pnk)) oldPersNameMap.set(pnk, []); oldPersNameMap.get(pnk).push(r);
+    });
+
+    var results = { added: [], removed: [], moved: [], titleChanged: [], nameChanged: [], themeMap: {}, all: [], stats: {} };
+    THEMES.forEach(function (t) { results.themeMap[t] = []; });
+    var matchedOld = new Set(), matchedNew = new Set();
+
+    function buildDiffs(oldRow, newRow) {
+        var diffs = [];
+        COLS.forEach(function (col) { if (col === 'full_name') return; if (oldRow[col] !== newRow[col]) diffs.push({ field: col, oldVal: oldRow[col], newVal: newRow[col] }); });
+        if (oldRow.job_title !== newRow.job_title) diffs.push({ field: 'job_title', oldVal: oldRow.job_title, newVal: newRow.job_title });
+        return diffs;
+    }
+
+    var unmatchedNew = [];
+    newFiltered.forEach(function (nr) { if (!oldKeySet.has(rowKey(nr))) unmatchedNew.push(nr); });
+
+    var after1 = [];
+    unmatchedNew.forEach(function (nr) {
+        var candidates = oldPosMap.get(positionKey(nr)) || [], match = null;
+        for (var i = 0; i < candidates.length; i++) { if (candidates[i].job_title !== nr.job_title && !matchedOld.has(rowKey(candidates[i]))) { match = candidates[i]; break; } }
+        if (match) { var tc = { type: 'title_changed', oldRow: match, newRow: nr, theme: nr.theme_of_work, changes: [{ field: 'job_title', oldVal: match.job_title, newVal: nr.job_title }] }; results.titleChanged.push(tc); results.all.push(tc); if (results.themeMap[tc.theme]) results.themeMap[tc.theme].push(tc); matchedOld.add(rowKey(match)); matchedNew.add(rowKey(nr)); }
+        else { after1.push(nr); }
+    });
+
+    var after2 = [];
+    after1.forEach(function (nr) {
+        var candidates = oldPersThemeMap.get(personThemeKey(nr)) || [], pnpk = positionNoPersonKey(nr), movedFrom = null;
+        for (var j = 0; j < candidates.length; j++) { if (positionNoPersonKey(candidates[j]) !== pnpk && !matchedOld.has(rowKey(candidates[j]))) { movedFrom = candidates[j]; break; } }
+        if (movedFrom) { var mc = { type: 'moved', oldRow: movedFrom, newRow: nr, theme: nr.theme_of_work, changes: buildDiffs(movedFrom, nr) }; results.moved.push(mc); results.all.push(mc); if (results.themeMap[mc.theme]) results.themeMap[mc.theme].push(mc); matchedOld.add(rowKey(movedFrom)); matchedNew.add(rowKey(nr)); }
+        else { after2.push(nr); }
+    });
+
+    var after3 = [];
+    after2.forEach(function (nr) {
+        var candidates = oldPersNameMap.get(personNameKey(nr)) || [], movedFrom = null;
+        for (var k = 0; k < candidates.length; k++) { var c = candidates[k]; if (!matchedOld.has(rowKey(c)) && positionKey(c) !== positionKey(nr)) { movedFrom = c; break; } }
+        if (movedFrom) { var mc = { type: 'moved', oldRow: movedFrom, newRow: nr, theme: nr.theme_of_work, changes: buildDiffs(movedFrom, nr) }; results.moved.push(mc); results.all.push(mc); if (results.themeMap[mc.theme]) results.themeMap[mc.theme].push(mc); matchedOld.add(rowKey(movedFrom)); matchedNew.add(rowKey(nr)); }
+        else { after3.push(nr); }
+    });
+
+    var newByPTKey = new Map();
+    after3.forEach(function (nr) { var ptk = positionWithTitleKey(nr); if (!newByPTKey.has(ptk)) newByPTKey.set(ptk, []); newByPTKey.get(ptk).push(nr); });
+    var oldUnmatchedByPTKey = new Map();
+    oldFiltered.forEach(function (or) { var rk = rowKey(or); if (newKeySet.has(rk) || matchedOld.has(rk)) return; var ptk = positionWithTitleKey(or); if (!oldUnmatchedByPTKey.has(ptk)) oldUnmatchedByPTKey.set(ptk, []); oldUnmatchedByPTKey.get(ptk).push(or); });
+
+    var after4 = [];
+    after3.forEach(function (nr) {
+        if (matchedNew.has(rowKey(nr))) return;
+        var ptk = positionWithTitleKey(nr), newAtPos = newByPTKey.get(ptk) || [], oldAtPos = oldUnmatchedByPTKey.get(ptk) || [];
+        var uNew = newAtPos.filter(function (r) { return !matchedNew.has(rowKey(r)); });
+        var uOld = oldAtPos.filter(function (r) { return !matchedOld.has(rowKey(r)); });
+        if (uNew.length === 1 && uOld.length === 1 && uOld[0].full_name !== nr.full_name) {
+            var changes = [{ field: 'full_name', oldVal: uOld[0].full_name, newVal: nr.full_name }];
+            var nc = { type: 'name_changed', oldRow: uOld[0], newRow: nr, theme: nr.theme_of_work, changes: changes };
+            results.nameChanged.push(nc); results.all.push(nc); if (results.themeMap[nc.theme]) results.themeMap[nc.theme].push(nc);
+            matchedOld.add(rowKey(uOld[0])); matchedNew.add(rowKey(nr)); return;
+        }
+        after4.push(nr);
+    });
+
+    after4.forEach(function (nr) { if (matchedNew.has(rowKey(nr))) return; var nc = { type: 'new', row: nr, theme: nr.theme_of_work }; results.added.push(nc); results.all.push(nc); if (results.themeMap[nc.theme]) results.themeMap[nc.theme].push(nc); });
+
+    oldFiltered.forEach(function (or) { var rk = rowKey(or); if (newKeySet.has(rk) || matchedOld.has(rk)) return; var rc = { type: 'removed', row: or, theme: or.theme_of_work }; results.removed.push(rc); results.all.push(rc); if (results.themeMap[rc.theme]) results.themeMap[rc.theme].push(rc); });
+
+    results.stats = {
+        oldTotal: oldRows.length, newTotal: newRows.length,
+        oldThemed: oldFiltered.length, newThemed: newFiltered.length,
+        added: results.added.length, removed: results.removed.length,
+        moved: results.moved.length, titleChanged: results.titleChanged.length,
+        nameChanged: results.nameChanged.length, total: results.all.length
+    };
+    THEMES.forEach(function (t) { results.stats['t_' + THEME_TAB_MAP[t]] = results.themeMap[t].length; });
+    return results;
+}
+
+/* ================================================================
+   NET CHANGE
+   ================================================================ */
+
+function buildNetChange(r) {
+    var divMap = {};
+    function ensureDiv(d) { if (!d || shouldExclude(d)) return null; if (!divMap[d]) divMap[d] = { added: 0, removed: 0, moved_in: 0, moved_out: 0, titleChanged: 0, nameChanged: 0 }; return divMap[d]; }
+    r.added.forEach(function (c) { var e = ensureDiv((c.row || c.newRow).business_unit_name); if (e) e.added++; });
+    r.removed.forEach(function (c) { var e = ensureDiv(c.row.business_unit_name); if (e) e.removed++; });
+    r.titleChanged.forEach(function (c) { var e = ensureDiv(c.newRow.business_unit_name); if (e) e.titleChanged++; });
+    r.nameChanged.forEach(function (c) { var e = ensureDiv(c.newRow.business_unit_name); if (e) e.nameChanged++; });
+    r.moved.forEach(function (c) { var od = c.oldRow.business_unit_name, nd = c.newRow.business_unit_name; if (od !== nd) { var eO = ensureDiv(od); if (eO) eO.moved_out++; var eN = ensureDiv(nd); if (eN) eN.moved_in++; } });
+    return divMap;
+}
+
+function renderNetChangeTable(r) {
+    var divMap = buildNetChange(r), divNames = sortDivNames(Object.keys(divMap));
+    if (!divNames.length) return '<p style="color:#999;padding:6px">No division data.</p>';
+    var tA = 0, tR = 0, tI = 0, tO = 0;
+    var h = '<table class="net-tbl"><thead><tr><th>Division</th><th>New</th><th>Departed</th><th>Moved In</th><th>Moved Out</th><th>Net Change</th><th>Title Changed</th><th>Name Changed</th></tr></thead><tbody>';
+    divNames.forEach(function (d) { var e = divMap[d], net = e.added - e.removed + e.moved_in - e.moved_out, cls = net > 0 ? 'net-positive' : (net < 0 ? 'net-negative' : 'net-zero'), sign = net > 0 ? '+' : ''; tA += e.added; tR += e.removed; tI += e.moved_in; tO += e.moved_out; h += '<tr><td><b>' + d + '</b></td><td style="color:#2e7d32">' + e.added + '</td><td style="color:#c62828">' + e.removed + '</td><td style="color:#1565c0">' + e.moved_in + '</td><td style="color:#e65100">' + e.moved_out + '</td><td class="' + cls + '">' + sign + net + '</td><td>' + e.titleChanged + '</td><td>' + e.nameChanged + '</td></tr>'; });
+    var tNet = tA - tR + tI - tO, tCls = tNet > 0 ? 'net-positive' : (tNet < 0 ? 'net-negative' : 'net-zero'), tSign = tNet > 0 ? '+' : '';
+    h += '<tr style="background:#f3e5f5;font-weight:700"><td>TOTAL</td><td style="color:#2e7d32">' + tA + '</td><td style="color:#c62828">' + tR + '</td><td style="color:#1565c0">' + tI + '</td><td style="color:#e65100">' + tO + '</td><td class="' + tCls + '">' + tSign + tNet + '</td><td>' + r.titleChanged.length + '</td><td>' + r.nameChanged.length + '</td></tr>';
+    return h + '</tbody></table>';
+}
+
+/* ================================================================
+   HEATMAP
+   ================================================================ */
+
+function buildHeatmapData(r) {
+    var divMap = {};
+    function ensureDiv(d) { if (!d || shouldExclude(d)) return null; if (!divMap[d]) { divMap[d] = { new: 0, removed: 0, moved: 0, title_changed: 0, name_changed: 0, total: 0 }; THEMES.forEach(function (t) { divMap[d]['t_' + t] = 0; }); } return divMap[d]; }
+    r.all.forEach(function (c) { var row = c.row || c.newRow, e = ensureDiv(row.business_unit_name); if (!e) return; if (['new','removed','moved','title_changed','name_changed'].indexOf(c.type) !== -1) e[c.type]++; e.total++; if (c.theme) e['t_' + c.theme] = (e['t_' + c.theme] || 0) + 1; });
+    return divMap;
+}
+
+function hmColor(val, maxVal) {
+    if (maxVal === 0 || val === 0) return { bg: '#f5f5f5', fg: '#999' };
+    var ratio = Math.min(val / maxVal, 1), r, g, b;
+    if (ratio < 0.25) { var t = ratio / 0.25; r = Math.round(200 + 55 * t); g = Math.round(230 - 30 * t); b = Math.round(201 - 101 * t); }
+    else if (ratio < 0.5) { var t = (ratio - 0.25) / 0.25; r = 255; g = Math.round(200 - 60 * t); b = Math.round(100 - 50 * t); }
+    else if (ratio < 0.75) { var t = (ratio - 0.5) / 0.25; r = Math.round(255 - 26 * t); g = Math.round(140 - 70 * t); b = Math.round(50 - 10 * t); }
+    else { var t = (ratio - 0.75) / 0.25; r = Math.round(229 - 30 * t); g = Math.round(70 - 40 * t); b = Math.round(40 - 10 * t); }
+    var fg = (r * 0.299 + g * 0.587 + b * 0.114) > 160 ? '#333' : '#fff';
+    return { bg: 'rgb(' + r + ',' + g + ',' + b + ')', fg: fg };
+}
+
+function renderHeatmapTab(r) {
+    var hmData = buildHeatmapData(r), divNames = sortDivNames(Object.keys(hmData));
+    if (!divNames.length) { document.getElementById('t-heatmap').innerHTML = '<h2 style="color:var(--purple-dark)">🔥 Change Heatmap</h2><p style="color:#999">No data.</p>'; return; }
+    var metrics = [{ key: 'total', label: 'Total', icon: '📊' },{ key: 'new', label: 'New', icon: '🟢' },{ key: 'removed', label: 'Departed', icon: '🔴' },{ key: 'moved', label: 'Moved', icon: '🟠' },{ key: 'title_changed', label: 'Title Changed', icon: '🟦' },{ key: 'name_changed', label: 'Name Changed', icon: '🟣' },{ key: 'by_theme', label: 'By Theme', icon: '🏷️' }];
+    var metricBar = '<div class="hm-metric-bar">';
+    metrics.forEach(function (m) { metricBar += '<button class="hm-metric-btn' + (m.key === HEATMAP_METRIC ? ' active' : '') + '" onclick="setHeatmapMetric(\'' + m.key + '\')">' + m.icon + ' ' + m.label + '</button>'; });
+    metricBar += '</div>';
+    var gridHtml = HEATMAP_METRIC === 'by_theme' ? renderHeatmapByTheme(hmData, divNames) : renderHeatmapSingleMetric(hmData, divNames, HEATMAP_METRIC);
+    document.getElementById('t-heatmap').innerHTML = '<h2 style="margin-bottom:6px;color:var(--purple-dark)">🔥 Change Heatmap</h2><p style="font-size:0.78rem;color:#666;margin-bottom:10px">Colour intensity shows where the most change is happening. Darker = more changes.</p>' + filterBannerHtml() + metricBar + gridHtml;
+}
+
+function renderHeatmapSingleMetric(hmData, divNames, metric) {
+    var colHeaders = ['New', 'Departed', 'Moved', 'Title Changed', 'Name Changed', 'Total'], colKeys = ['new', 'removed', 'moved', 'title_changed', 'name_changed', 'total'];
+    var maxPerCol = colKeys.map(function (k) { var mx = 0; divNames.forEach(function (d) { if (hmData[d][k] > mx) mx = hmData[d][k]; }); return mx; });
+    var gridStyle = 'grid-template-columns: minmax(160px, 1fr) repeat(' + colKeys.length + ', minmax(80px, 1fr))';
+    var html = '<div class="hm-container"><div class="hm-grid" style="' + gridStyle + '"><div class="hm-corner">Division</div>';
+    colHeaders.forEach(function (h, idx) { var style = (metric !== 'total' && colKeys[idx] === metric) ? ' style="background:#7b2d8e"' : ''; html += '<div class="hm-col-hdr"' + style + '>' + h + '</div>'; });
+    divNames.forEach(function (d) { var entry = hmData[d]; html += '<div class="hm-row-hdr">' + d + '</div>'; colKeys.forEach(function (k, idx) { var val = entry[k], clr = hmColor(val, maxPerCol[idx]), dim = (metric !== 'total' && k !== metric) ? 'opacity:0.4;' : ''; html += '<div class="hm-cell" style="background:' + clr.bg + ';color:' + clr.fg + ';' + dim + '" title="' + d + ' — ' + colHeaders[idx] + ': ' + val + '"><span class="hm-val">' + val + '</span></div>'; }); });
+    html += '<div class="hm-row-hdr" style="font-weight:700;background:#f3e5f5">TOTAL</div>';
+    colKeys.forEach(function (k) { var total = 0; divNames.forEach(function (d) { total += hmData[d][k]; }); html += '<div class="hm-cell" style="background:#f3e5f5;color:var(--purple-dark);font-weight:700;border:1px solid var(--purple-light)"><span class="hm-val">' + total + '</span></div>'; });
+    html += '</div></div><div class="hm-scale"><span>Low</span><div class="hm-scale-bar"></div><span>High</span></div>';
+    return html;
+}
+
+function renderHeatmapByTheme(hmData, divNames) {
+    var maxPerTheme = {}; THEMES.forEach(function (t) { var mx = 0; divNames.forEach(function (d) { var v = hmData[d]['t_' + t] || 0; if (v > mx) mx = v; }); maxPerTheme[t] = mx; });
+    var gridStyle = 'grid-template-columns: minmax(160px, 1fr) repeat(' + THEMES.length + ', minmax(80px, 1fr))';
+    var html = '<div class="hm-container"><div class="hm-grid" style="' + gridStyle + '"><div class="hm-corner">Division</div>';
+    THEMES.forEach(function (t) { html += '<div class="hm-col-hdr" style="background:' + THEME_COLORS[t] + '">' + THEME_ICONS[t] + '<br>' + t + '</div>'; });
+    divNames.forEach(function (d) { html += '<div class="hm-row-hdr">' + d + '</div>'; THEMES.forEach(function (t) { var val = hmData[d]['t_' + t] || 0, clr = hmColor(val, maxPerTheme[t]); html += '<div class="hm-cell" style="background:' + clr.bg + ';color:' + clr.fg + '" title="' + d + ' — ' + t + ': ' + val + '"><span class="hm-val">' + val + '</span></div>'; }); });
+    html += '<div class="hm-row-hdr" style="font-weight:700;background:#f3e5f5">TOTAL</div>';
+    THEMES.forEach(function (t) { var total = 0; divNames.forEach(function (d) { total += hmData[d]['t_' + t] || 0; }); html += '<div class="hm-cell" style="background:#f3e5f5;color:var(--purple-dark);font-weight:700;border:1px solid var(--purple-light)"><span class="hm-val">' + total + '</span></div>'; });
+    html += '</div></div><div class="hm-scale"><span>Low</span><div class="hm-scale-bar"></div><span>High</span></div>';
+    return html;
+}
+
+function setHeatmapMetric(metric) { HEATMAP_METRIC = metric; if (COMPARISON) renderHeatmapTab(COMPARISON); }
+
+/* ================================================================
+   NON-WORKFORCE CONTRACTORS TAB
+   ================================================================ */
+
+function getNWCRows(data) { return data.filter(isNWC); }
+
+function renderNWCTab() {
+    var oldNWC = getNWCRows(OLD_RAW), newNWC = getNWCRows(NEW_RAW);
+    var oldCount = oldNWC.length, newCount = newNWC.length;
+    var netChange = newCount - oldCount;
+    var netSign = netChange > 0 ? '+' : '', netColor = netChange > 0 ? '#2e7d32' : (netChange < 0 ? '#c62828' : '#888');
+    var netBg = netChange > 0 ? '#e8f5e9' : (netChange < 0 ? '#ffebee' : '#f5f5f5');
+
+    // Division concentration — new file
+    var divCountNew = {}, divCountOld = {};
+    newNWC.forEach(function (r) { var d = r.business_unit_name || '(Unknown)'; if (!shouldExclude(d)) divCountNew[d] = (divCountNew[d] || 0) + 1; });
+    oldNWC.forEach(function (r) { var d = r.business_unit_name || '(Unknown)'; if (!shouldExclude(d)) divCountOld[d] = (divCountOld[d] || 0) + 1; });
+
+    var allDivs = {}; Object.keys(divCountNew).forEach(function (k) { allDivs[k] = true; }); Object.keys(divCountOld).forEach(function (k) { allDivs[k] = true; });
+    var divNames = sortDivNames(Object.keys(allDivs));
+    var maxDivCount = 0; divNames.forEach(function (d) { var v = divCountNew[d] || 0; if (v > maxDivCount) maxDivCount = v; });
+
+    // Service partner concentration — new file
+    var spMap = {};
+    newNWC.forEach(function (r) { var sp = r.external_service_partner || ''; if (!sp) return; spMap[sp] = (spMap[sp] || 0) + 1; });
+    var spList = Object.keys(spMap).map(function (k) { return { name: k, count: spMap[k] }; }).sort(function (a, b) { return b.count - a.count; });
+    var spTop = spList.slice(0, 15);
+    var maxSP = spTop.length > 0 ? spTop[0].count : 1;
+    var spWithPartner = 0; newNWC.forEach(function (r) { if (r.external_service_partner) spWithPartner++; });
+
+    // Position description concentration — new file
+    var posMap = {};
+    newNWC.forEach(function (r) { var p = r.position_description || ''; if (!p) return; posMap[p] = (posMap[p] || 0) + 1; });
+    var posList = Object.keys(posMap).map(function (k) { return { name: k, count: posMap[k] }; }).sort(function (a, b) { return b.count - a.count; });
+    var posTop = posList.slice(0, 15);
+    var maxPos = posTop.length > 0 ? posTop[0].count : 1;
+    var posWithDesc = 0; newNWC.forEach(function (r) { if (r.position_description) posWithDesc++; });
+
+    // Summary cards
+    var html = '<h2 style="margin-bottom:6px;color:var(--purple-dark)">👷 Non-Workforce Contractors</h2>';
+    html += '<p style="font-size:0.78rem;color:#666;margin-bottom:12px">These are people with <code>category = Non Workforce Contractor</code> and no theme of work. They are excluded from the main change analysis.</p>';
+
+    html += '<div class="nwc-summary-grid">';
+    html += '<div class="nwc-summary-card"><div class="nsc-num">' + newCount + '</div><div class="nsc-lbl">Current Contractors (New File)</div></div>';
+    html += '<div class="nwc-summary-card"><div class="nsc-num">' + oldCount + '</div><div class="nsc-lbl">Previous Contractors (Old File)</div></div>';
+    html += '<div class="nwc-summary-card"><div class="nsc-num"><span class="nwc-net" style="background:' + netBg + ';color:' + netColor + '">' + netSign + netChange + '</span></div><div class="nsc-lbl">Net Change</div></div>';
+    html += '<div class="nwc-summary-card"><div class="nsc-num">' + divNames.length + '</div><div class="nsc-lbl">Divisions Using Contractors</div></div>';
+    html += '<div class="nwc-summary-card"><div class="nsc-num">' + spList.length + '</div><div class="nsc-lbl">Unique Service Partners</div></div>';
+    html += '<div class="nwc-summary-card"><div class="nsc-num">' + posList.length + '</div><div class="nsc-lbl">Unique Positions</div></div>';
+    html += '</div>';
+
+    // Bar chart — division concentration
+    html += '<hr class="sep">';
+    html += sectionHtml('nwc-div', '📊 Contractor Concentration by Division', '#1565c0', divNames.length + ' divisions', buildNWCDivChart(divNames, divCountNew, divCountOld, maxDivCount));
+
+    // Service partner table
+    html += '<hr class="sep">';
+    var spContent = '';
+    if (spTop.length === 0) { spContent = '<p style="color:#999">No service partner data populated.</p>'; }
+    else {
+        spContent += '<p style="font-size:0.72rem;color:#888;margin-bottom:6px">' + spWithPartner + ' of ' + newCount + ' contractors (' + Math.round(spWithPartner / newCount * 100) + '%) have a service partner listed.</p>';
+        spContent += '<table class="nwc-top-table"><thead><tr><th>#</th><th>Service Partner</th><th>Count</th><th>Share</th><th></th></tr></thead><tbody>';
+        spTop.forEach(function (sp, idx) {
+            var pct = Math.round(sp.count / newCount * 100);
+            var barW = Math.round(sp.count / maxSP * 100);
+            spContent += '<tr><td>' + (idx + 1) + '</td><td><b>' + sp.name + '</b></td><td>' + sp.count + '</td><td>' + pct + '%</td><td><span class="nwc-pct-bar" style="width:' + barW + 'px"></span></td></tr>';
+        });
+        spContent += '</tbody></table>';
+        if (spList.length > 15) spContent += '<p style="font-size:0.72rem;color:#999">Showing top 15 of ' + spList.length + ' partners</p>';
+    }
+    html += sectionHtml('nwc-sp', '🏢 Top Service Partners', '#1565c0', spTop.length, spContent);
+
+    // Position description table
+    html += '<hr class="sep">';
+    var posContent = '';
+    if (posTop.length === 0) { posContent = '<p style="color:#999">No position description data populated.</p>'; }
+    else {
+        posContent += '<p style="font-size:0.72rem;color:#888;margin-bottom:6px">' + posWithDesc + ' of ' + newCount + ' contractors (' + Math.round(posWithDesc / newCount * 100) + '%) have a position description.</p>';
+        posContent += '<table class="nwc-top-table"><thead><tr><th>#</th><th>Position Description</th><th>Count</th><th>Share</th><th></th></tr></thead><tbody>';
+        posTop.forEach(function (p, idx) {
+            var pct = Math.round(p.count / newCount * 100);
+            var barW = Math.round(p.count / maxPos * 100);
+            posContent += '<tr><td>' + (idx + 1) + '</td><td><b>' + p.name + '</b></td><td>' + p.count + '</td><td>' + pct + '%</td><td><span class="nwc-pct-bar" style="width:' + barW + 'px"></span></td></tr>';
+        });
+        posContent += '</tbody></table>';
+        if (posList.length > 15) posContent += '<p style="font-size:0.72rem;color:#999">Showing top 15 of ' + posList.length + ' positions</p>';
+    }
+    html += sectionHtml('nwc-pos', '📋 Top Position Descriptions', '#1565c0', posTop.length, posContent);
+
+    // Division detail table
+    html += '<hr class="sep">';
+    var divDetailHtml = '<div class="filter-bar"><input placeholder="🔍 Search…" oninput="filterNWCTable(this.value)"><button class="export-btn" onclick="exportNWCTable()">⬇ Export</button></div>';
+    divDetailHtml += '<table class="nwc-top-table" id="nwcDetailTbl"><thead><tr><th>Division</th><th>Current</th><th>Previous</th><th>Change</th><th>Top Service Partner</th><th>Top Position</th></tr></thead><tbody>';
+    divNames.forEach(function (d) {
+        var nc = divCountNew[d] || 0, oc = divCountOld[d] || 0, ch = nc - oc;
+        var chCls = ch > 0 ? 'net-positive' : (ch < 0 ? 'net-negative' : 'net-zero'), chSign = ch > 0 ? '+' : '';
+        // Top SP for this division
+        var dspMap = {}; newNWC.filter(function (r) { return r.business_unit_name === d; }).forEach(function (r) { if (r.external_service_partner) dspMap[r.external_service_partner] = (dspMap[r.external_service_partner] || 0) + 1; });
+        var topSP = Object.keys(dspMap).sort(function (a, b) { return dspMap[b] - dspMap[a]; })[0] || '—';
+        // Top position for this division
+        var dpMap = {}; newNWC.filter(function (r) { return r.business_unit_name === d; }).forEach(function (r) { if (r.position_description) dpMap[r.position_description] = (dpMap[r.position_description] || 0) + 1; });
+        var topPos = Object.keys(dpMap).sort(function (a, b) { return dpMap[b] - dpMap[a]; })[0] || '—';
+        divDetailHtml += '<tr><td><b>' + d + '</b></td><td>' + nc + '</td><td>' + oc + '</td><td class="' + chCls + '">' + chSign + ch + '</td><td>' + topSP + '</td><td>' + topPos + '</td></tr>';
+    });
+    divDetailHtml += '</tbody></table>';
+    html += sectionHtml('nwc-detail', '📑 Division Detail', '#1565c0', divNames.length, divDetailHtml);
+
+    document.getElementById('t-nwc').innerHTML = html;
+}
+
+function buildNWCDivChart(divNames, divCountNew, divCountOld, maxCount) {
+    if (!divNames.length) return '<p style="color:#999">No data.</p>';
+    var chartH = 200;
+    var html = '<div style="overflow-x:auto"><div class="nwc-bar-chart">';
+    divNames.forEach(function (d) {
+        var nc = divCountNew[d] || 0, oc = divCountOld[d] || 0;
+        var h = maxCount > 0 ? Math.max(Math.round(nc / maxCount * chartH), 4) : 4;
+        var ch = nc - oc, chSign = ch > 0 ? '+' : '', chColor = ch > 0 ? '#2e7d32' : (ch < 0 ? '#c62828' : '#888');
+        html += '<div class="nwc-bar-wrap" style="min-width:70px" title="' + d + ': ' + nc + ' (was ' + oc + ', ' + chSign + ch + ')">';
+        html += '<div class="nwc-bar-val">' + nc + '</div>';
+        html += '<div class="nwc-bar" style="height:' + h + 'px;background:#1565c0"></div>';
+        html += '<div class="nwc-bar-label">' + d + '</div>';
+        if (ch !== 0) html += '<div style="font-size:0.58rem;font-weight:700;color:' + chColor + '">' + chSign + ch + '</div>';
+        html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+}
+
+function filterNWCTable(s) { var q = s.toLowerCase(); document.querySelectorAll('#nwcDetailTbl tbody tr').forEach(function (r) { r.style.display = r.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none'; }); }
+
+function exportNWCTable() { var table = document.getElementById('nwcDetailTbl'); if (!table) { alert('No data.'); return; } downloadCSV(table, 'non_workforce_contractors.csv'); }
+
+/* ================================================================
+   PERSON LOOKUP
+   ================================================================ */
+
+function renderLookupTab() {
+    document.getElementById('t-lookup').innerHTML =
+        '<h2 style="margin-bottom:6px;color:var(--purple-dark)">🔎 Person Lookup</h2>' +
+        '<p style="font-size:0.78rem;color:#666;margin-bottom:6px">Search for any person to see their full picture across both files and any detected changes.</p>' +
+        '<div class="lookup-bar"><input id="lookupInput" type="text" placeholder="Start typing a name… (minimum 2 characters)" oninput="doLookup(this.value)"></div>' +
+        '<div class="lookup-results" id="lookupResults"></div>';
+}
+
+function doLookup(query) {
+    var container = document.getElementById('lookupResults'), q = query.trim().toLowerCase();
+    if (q.length < 2) { container.innerHTML = ''; return; }
+    var nameMap = {};
+    OLD_DATA.forEach(function (r) { if (r.full_name && r.full_name.toLowerCase().indexOf(q) !== -1) { if (!nameMap[r.full_name]) nameMap[r.full_name] = { old: [], new: [], changes: [] }; nameMap[r.full_name].old.push(r); } });
+    NEW_DATA.forEach(function (r) { if (r.full_name && r.full_name.toLowerCase().indexOf(q) !== -1) { if (!nameMap[r.full_name]) nameMap[r.full_name] = { old: [], new: [], changes: [] }; nameMap[r.full_name].new.push(r); } });
+    if (COMPARISON) { COMPARISON.all.forEach(function (c) { var row = c.row || c.newRow, oldRow = c.oldRow || null; if (row.full_name && nameMap[row.full_name]) nameMap[row.full_name].changes.push(c); if (oldRow && oldRow.full_name && oldRow.full_name !== row.full_name && nameMap[oldRow.full_name]) nameMap[oldRow.full_name].changes.push(c); }); }
+
+    var names = Object.keys(nameMap).sort();
+    if (!names.length) { container.innerHTML = '<div class="lookup-none">No people found matching "' + query + '"</div>'; return; }
+    if (names.length > 50) { container.innerHTML = '<div class="lookup-none">' + names.length + ' results — please type more to narrow down</div>'; return; }
+
+    var html = '';
+    names.forEach(function (name) {
+        var info = nameMap[name], inOld = info.old.length > 0, inNew = info.new.length > 0;
+        var statusText = '', statusColor = '', changeTypes = {};
+        info.changes.forEach(function (c) { changeTypes[c.type] = c; });
+        if (changeTypes.name_changed) { statusText = 'NAME CHANGED'; statusColor = '#7b1fa2'; }
+        else if (changeTypes.moved) { statusText = 'MOVED'; statusColor = '#9c27b0'; }
+        else if (changeTypes.title_changed) { statusText = 'TITLE CHANGED'; statusColor = '#009688'; }
+        else if (!inOld && inNew) { statusText = 'NEW'; statusColor = '#4caf50'; }
+        else if (inOld && !inNew) { statusText = 'DEPARTED'; statusColor = '#f44336'; }
+        else if (inOld && inNew && !info.changes.length) { statusText = 'UNCHANGED'; statusColor = '#9e9e9e'; }
+
+        html += '<div class="lookup-person-card"><h4>' + name + '</h4>';
+        if (statusText) html += '<span class="lpc-status" style="background:' + statusColor + '">' + statusText + '</span>';
+        html += '<div class="lpc-grid">';
+        ['old', 'new'].forEach(function (which) {
+            var label = which === 'old' ? '📁 Old File (Baseline)' : '📁 New File (Current)';
+            var rows = info[which === 'old' ? 'old' : 'new'];
+            html += '<div class="lpc-col"><h5>' + label + '</h5>';
+            if (!rows.length) { html += '<div class="lpc-row" style="color:#999">Not found</div>'; }
+            else { rows.forEach(function (r) { html += '<div style="background:#fafafa;border-radius:4px;padding:4px 6px;margin-bottom:4px;border-left:3px solid #ccc"><div class="lpc-row"><span class="lpc-label">Title:</span> ' + (r.job_title || '—') + '</div><div class="lpc-row"><span class="lpc-label">Theme:</span> ' + r.theme_of_work + '</div><div class="lpc-row"><span class="lpc-label">Division:</span> ' + r.business_unit_name + '</div><div class="lpc-row"><span class="lpc-label">BU:</span> ' + r.division_name + '</div><div class="lpc-row"><span class="lpc-label">Dept:</span> ' + r.department_name + '</div><div class="lpc-row"><span class="lpc-label">Team:</span> ' + r.team_name + '</div></div>'; }); }
+            html += '</div>';
+        });
+        html += '</div>';
+        if (info.changes.length) {
+            html += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #eee"><h5 style="font-size:0.72rem;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Changes Detected</h5>';
+            info.changes.forEach(function (c) { var d = getChangeTypeDisplay(c.type); html += '<div style="margin-bottom:4px"><span class="badge ' + d.bc + '">' + d.bt + '</span> '; if (c.changes) { c.changes.forEach(function (ch) { html += '<span class="chg"><b>' + (DISPLAY_LABELS[ch.field] || ch.field) + ':</b> <span class="old">' + (ch.oldVal || '(empty)') + '</span><span class="arr">→</span><span class="new">' + (ch.newVal || '(empty)') + '</span></span> '; }); } html += '</div>'; });
+            html += '</div>';
+        }
+        html += '</div>';
+    });
+    container.innerHTML = html;
+}
+
+/* ================================================================
+   MAIN
+   ================================================================ */
+
+async function run() {
+    var oF = document.getElementById('oldFile'), nF = document.getElementById('newFile');
+    if (!oF.files[0] || !nF.files[0]) { alert('Select both files.'); return; }
+    document.getElementById('loader').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('empty').style.display = 'none';
+    try {
+        var data = await Promise.all([readFile(oF.files[0]), readFile(nF.files[0])]);
+        OLD_RAW = data[0]; NEW_RAW = data[1];
+        OLD_DATA = data[0]; NEW_DATA = data[1];
+        ACTIVE_DIV_FILTER = '';
+        populateGlobalFilter();
+        COMPARISON = compareData(OLD_DATA, NEW_DATA);
+        renderEverything(COMPARISON);
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('results').style.display = 'block';
+    } catch (err) { document.getElementById('loader').style.display = 'none'; alert('Error: ' + err.message); console.error(err); }
+}
+
+function switchTab(id) {
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function (t) { t.classList.remove('active'); });
+    document.querySelector('.tab[data-t="' + id + '"]').classList.add('active');
+    document.getElementById('t-' + id).classList.add('active');
+}
+
+function renderEverything(r) {
+    renderSummary(r);
+    renderLookupTab();
+    renderHeatmapTab(r);
+    renderNWCTab();
+    THEMES.forEach(function (n) { renderThemeTab(THEME_TAB_MAP[n], n, r.themeMap[n]); });
+    renderAllChangesTab(r);
+    renderEGMChart();
+    renderDivisionChart();
+}
+
+/* ================================================================
+   DISPLAY LABEL MAP
+   ================================================================ */
+
+function getChangeTypeDisplay(type) {
+    switch (type) {
+        case 'new': return { rc: 'row-new', bc: 'b-new', bt: 'NEW' };
+        case 'removed': return { rc: 'row-removed', bc: 'b-rem', bt: 'DEPARTED' };
+        case 'moved': return { rc: 'row-moved', bc: 'b-moved', bt: 'MOVED' };
+        case 'title_changed': return { rc: 'row-title_changed', bc: 'b-title', bt: 'TITLE CHANGED' };
+        case 'name_changed': return { rc: 'row-name_changed', bc: 'b-name', bt: 'NAME CHANGED' };
+        default: return { rc: '', bc: '', bt: type };
+    }
+}
+
+function legendHtml() {
+    return '<div class="legend"><div class="legend-item"><div class="legend-color" style="background:var(--green-hl);border-color:#4caf50"></div> New</div><div class="legend-item"><div class="legend-color" style="background:var(--red-hl);border-color:#f44336"></div> Departed</div><div class="legend-item"><div class="legend-color" style="background:var(--orange-hl);border-color:#9c27b0"></div> Moved</div><div class="legend-item"><div class="legend-color" style="background:var(--teal-hl);border-color:#009688"></div> Title Changed</div><div class="legend-item"><div class="legend-color" style="background:var(--lilac-hl);border-color:#7b1fa2"></div> Name Changed</div></div>';
+}
+
+function filterBannerHtml() {
+    if (!ACTIVE_DIV_FILTER) return '';
+    return '<div style="background:#fff3e0;border:1px solid #ff9800;border-radius:5px;padding:6px 12px;margin-bottom:8px;font-size:0.78rem;color:#e65100">⚡ Filtered to: <b>' + ACTIVE_DIV_FILTER + '</b></div>';
+}
+
+/* ================================================================
+   SUMMARY — with improved scope explanation
+   ================================================================ */
+
+function renderSummary(r) {
+    var s = r.stats;
+    var oldNWC = getNWCRows(OLD_RAW).length, newNWC = getNWCRows(NEW_RAW).length;
+    var tc = THEMES.map(function (t) { return '<div class="card" style="border-left-color:' + THEME_COLORS[t] + '"><div class="num">' + (s['t_' + THEME_TAB_MAP[t]] || 0) + '</div><div class="lbl">' + THEME_ICONS[t] + ' ' + t + '</div></div>'; }).join('');
+    var netTotal = s.added - s.removed, netSign = netTotal > 0 ? '+' : '';
+    var netHtml = '<div style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:0.85rem;font-weight:700;margin-left:10px;' + (netTotal > 0 ? 'background:#e8f5e9;color:#2e7d32' : (netTotal < 0 ? 'background:#ffebee;color:#c62828' : 'background:#f5f5f5;color:#888')) + '">' + netSign + netTotal + ' net headcount</div>';
+
+    var scopeHtml = '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:#555">' +
+        '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:6px">' +
+            '<div><b>Total rows</b> — old: <b>' + s.oldTotal + '</b> · new: <b>' + s.newTotal + '</b></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:20px;flex-wrap:wrap">' +
+            '<div style="flex:1;min-width:200px;background:#e8f5e9;border-radius:4px;padding:6px 10px;border-left:3px solid #4caf50">' +
+                '<b style="color:#2e7d32">✅ In scope: ' + s.newThemed + '</b> <span style="color:#888">(new file)</span><br>' +
+                '<span style="font-size:0.72rem;color:#666">Directors, Staff, Workforce Contractors &amp; Casuals<br>These are people with a Theme of Work — the tool analyses changes for this group.</span></div>' +
+            '<div style="flex:1;min-width:200px;background:#e3f2fd;border-radius:4px;padding:6px 10px;border-left:3px solid #1565c0">' +
+                '<b style="color:#1565c0">👷 Out of scope: ' + newNWC + '</b> <span style="color:#888">(new file)</span><br>' +
+                '<span style="font-size:0.72rem;color:#666">Non-Workforce Contractors — no Theme of Work assigned.<br>See the <a href="#" onclick="switchTab(\'nwc\');return false" style="color:#1565c0;font-weight:600">👷 Contractors tab</a> for their analysis.</span></div>' +
+        '</div></div>';
+
+    document.getElementById('t-summary').innerHTML =
+        '<h2 style="margin-bottom:10px;color:var(--purple-dark)">📋 Summary ' + netHtml + '</h2>' + filterBannerHtml() + scopeHtml +
+        '<div class="cards">' +
+            '<div class="card green"><div class="num">' + s.added + '</div><div class="lbl">New</div></div>' +
+            '<div class="card red"><div class="num">' + s.removed + '</div><div class="lbl">Departed</div></div>' +
+            '<div class="card yellow"><div class="num">' + s.moved + '</div><div class="lbl">Moved</div></div>' +
+            '<div class="card teal"><div class="num">' + s.titleChanged + '</div><div class="lbl">Title Changed</div></div>' +
+            '<div class="card lilac"><div class="num">' + s.nameChanged + '</div><div class="lbl">Name Changed</div></div>' +
+            '<div class="card"><div class="num">' + s.total + '</div><div class="lbl">Total</div></div></div>' +
+        '<h3 style="margin:12px 0 6px;color:var(--purple-dark)">By Theme</h3><div class="cards">' + tc + '</div>' +
+        '<hr class="sep">' +
+        sectionHtml('s-net', '📊 Net Change by Division', 'var(--purple-dark)', Object.keys(buildNetChange(r)).length + ' divisions', renderNetChangeTable(r)) +
+        '<hr class="sep">' + sectionHtml('s-new', 'New', '#4caf50', s.added, buildSimpleTable(r.added, 'new')) +
+        '<hr class="sep">' + sectionHtml('s-dep', 'Departed', '#f44336', s.removed, buildSimpleTable(r.removed, 'removed')) +
+        '<hr class="sep">' + sectionHtml('s-mov', 'Moved', '#ff9800', s.moved, buildModifiedTable(r.moved)) +
+        '<hr class="sep">' + sectionHtml('s-tc', 'Title Changed', '#009688', s.titleChanged, buildModifiedTable(r.titleChanged)) +
+        '<hr class="sep">' + sectionHtml('s-nc', 'Name Changed', '#7b1fa2', s.nameChanged, buildModifiedTable(r.nameChanged));
+}
+
+/* ================================================================
+   TABLE BUILDERS
+   ================================================================ */
+
+function buildSimpleTable(list, type) {
+    if (!list.length) return '<p style="color:#999;padding:6px">None.</p>';
+    var d = getChangeTypeDisplay(type);
+    var h = '<div class="tbl-wrap"><table><thead><tr><th>Status</th><th>Theme</th><th>Full Name</th><th>Job Title</th><th>Division</th><th>Business Unit</th><th>Department</th><th>Team</th></tr></thead><tbody>';
+    list.forEach(function (c) { var row = c.row || c.newRow; h += '<tr class="' + d.rc + '"><td><span class="badge ' + d.bc + '">' + d.bt + '</span></td><td>' + row.theme_of_work + '</td><td><b>' + row.full_name + '</b></td><td>' + (row.job_title || '') + '</td><td>' + row.business_unit_name + '</td><td>' + row.division_name + '</td><td>' + row.department_name + '</td><td>' + row.team_name + '</td></tr>'; });
+    return h + '</tbody></table></div>';
+}
+
+function buildModifiedTable(list) {
+    if (!list.length) return '<p style="color:#999;padding:6px">None.</p>';
+    var h = '<div class="tbl-wrap"><table><thead><tr><th>Type</th><th>Theme</th><th>Full Name</th><th>Job Title</th><th>Division</th><th>Business Unit</th><th>Department</th><th>Team</th><th>Changes</th></tr></thead><tbody>';
+    list.forEach(function (c) { var row = c.newRow, d = getChangeTypeDisplay(c.type); var det = c.changes.map(function (ch) { return '<div class="chg"><b>' + (DISPLAY_LABELS[ch.field] || ch.field) + ':</b> <span class="old">' + (ch.oldVal || '(empty)') + '</span><span class="arr">→</span><span class="new">' + (ch.newVal || '(empty)') + '</span></div>'; }).join(''); h += '<tr class="' + d.rc + '"><td><span class="badge ' + d.bc + '">' + d.bt + '</span></td><td>' + row.theme_of_work + '</td><td><b>' + row.full_name + '</b></td><td>' + (row.job_title || '') + '</td><td>' + row.business_unit_name + '</td><td>' + row.division_name + '</td><td>' + row.department_name + '</td><td>' + row.team_name + '</td><td>' + det + '</td></tr>'; });
+    return h + '</tbody></table></div>';
+}
+
+/* ================================================================
+   THEME TABS
+   ================================================================ */
+
+function renderThemeTab(tabId, name, list) {
+    var nw = list.filter(function (c) { return c.type === 'new'; }), rm = list.filter(function (c) { return c.type === 'removed'; }), mv = list.filter(function (c) { return c.type === 'moved'; }), tc = list.filter(function (c) { return c.type === 'title_changed'; }), nc = list.filter(function (c) { return c.type === 'name_changed'; });
+    document.getElementById('t-' + tabId).innerHTML =
+        '<h2 style="margin-bottom:10px;color:var(--purple-dark)">' + (THEME_ICONS[name] || '') + ' ' + name + '</h2>' + filterBannerHtml() + legendHtml() +
+        '<div class="cards"><div class="card green"><div class="num">' + nw.length + '</div><div class="lbl">New</div></div><div class="card red"><div class="num">' + rm.length + '</div><div class="lbl">Departed</div></div><div class="card yellow"><div class="num">' + mv.length + '</div><div class="lbl">Moved</div></div><div class="card teal"><div class="num">' + tc.length + '</div><div class="lbl">Title Changed</div></div><div class="card lilac"><div class="num">' + nc.length + '</div><div class="lbl">Name Changed</div></div></div>' +
+        '<div class="filter-bar"><input placeholder="🔍 Search…" oninput="filterTabTables(\'' + tabId + '\', this.value)"><button class="export-btn" onclick="exportTab(\'' + tabId + '\',\'' + name + '\')">⬇ Export</button></div>' +
+        sectionHtml(tabId + '-new', 'New', '#4caf50', nw.length, buildSimpleTable(nw, 'new')) + '<hr class="sep">' +
+        sectionHtml(tabId + '-dep', 'Departed', '#f44336', rm.length, buildSimpleTable(rm, 'removed')) + '<hr class="sep">' +
+        sectionHtml(tabId + '-mov', 'Moved', '#ff9800', mv.length, buildModifiedTable(mv)) + '<hr class="sep">' +
+        sectionHtml(tabId + '-tc', 'Title Changed', '#009688', tc.length, buildModifiedTable(tc)) + '<hr class="sep">' +
+        sectionHtml(tabId + '-nc', 'Name Changed', '#7b1fa2', nc.length, buildModifiedTable(nc));
+}
+
+/* ================================================================
+   ALL CHANGES TAB
+   ================================================================ */
+
+function renderAllChangesTab(r) {
+    var to = THEMES.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+    document.getElementById('t-all').innerHTML =
+        '<h2 style="margin-bottom:10px;color:var(--purple-dark)">🔄 All Changes</h2>' + filterBannerHtml() + legendHtml() +
+        '<div class="filter-bar"><input placeholder="🔍 Search…" oninput="filterAllChanges(this.value)"><select onchange="filterAllByType(this.value)"><option value="">All Types</option><option value="new">New</option><option value="removed">Departed</option><option value="moved">Moved</option><option value="title_changed">Title Changed</option><option value="name_changed">Name Changed</option></select><select onchange="filterAllByTheme(this.value)"><option value="">All Themes</option>' + to + '</select><button class="export-btn" onclick="exportAllChanges()">⬇ Export</button></div><div class="tbl-wrap">' + buildAllTable(r.all) + '</div>';
+}
+
+function buildAllTable(list) {
+    if (!list.length) return '<p style="color:#999">No changes.</p>';
+    var h = '<table id="atbl"><thead><tr><th>Type</th><th>Theme</th><th>Full Name</th><th>Job Title</th><th>Division</th><th>Business Unit</th><th>Department</th><th>Team</th><th>Details</th></tr></thead><tbody>';
+    list.forEach(function (c) { var row = c.row || c.newRow, d = getChangeTypeDisplay(c.type); var det = c.changes ? c.changes.map(function (ch) { return '<div class="chg"><b>' + (DISPLAY_LABELS[ch.field] || ch.field) + ':</b> <span class="old">' + (ch.oldVal || '(empty)') + '</span><span class="arr">→</span><span class="new">' + (ch.newVal || '(empty)') + '</span></div>'; }).join('') : (c.type === 'new' ? 'New entry' : 'Departed'); h += '<tr class="' + d.rc + '" data-tp="' + c.type + '" data-th="' + row.theme_of_work + '"><td><span class="badge ' + d.bc + '">' + d.bt + '</span></td><td>' + row.theme_of_work + '</td><td><b>' + row.full_name + '</b></td><td>' + (row.job_title || '') + '</td><td>' + row.business_unit_name + '</td><td>' + row.division_name + '</td><td>' + row.department_name + '</td><td>' + row.team_name + '</td><td>' + det + '</td></tr>'; });
+    return h + '</tbody></table>';
+}
+
+function filterAllChanges(s) { var q = s.toLowerCase(); document.querySelectorAll('#atbl tbody tr').forEach(function (r) { r.style.display = r.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none'; }); }
+function filterAllByType(v) { document.querySelectorAll('#atbl tbody tr').forEach(function (r) { r.style.display = (!v || r.dataset.tp === v) ? '' : 'none'; }); }
+function filterAllByTheme(v) { document.querySelectorAll('#atbl tbody tr').forEach(function (r) { r.style.display = (!v || r.dataset.th === v) ? '' : 'none'; }); }
+function filterTabTables(tabId, s) { var q = s.toLowerCase(); document.querySelectorAll('#t-' + tabId + ' table').forEach(function (t) { t.querySelectorAll('tbody tr').forEach(function (r) { r.style.display = r.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none'; }); }); }
+
+/* ================================================================
+   ZOOM / CHART TOOLBAR
+   ================================================================ */
+
+function canvasSetZoom(id, z) { var inner = document.getElementById(id + '-inner'), lbl = document.getElementById(id + '-zlbl'); if (!inner || !lbl) return; z = Math.min(5, Math.max(0.3, z)); canvasZoomLevels[id] = z; lbl.textContent = Math.round(z * 100) + '%'; inner.style.fontSize = (BASE_FONT_SIZE * z) + 'px'; }
+function canvasGetZoom(id) { return canvasZoomLevels[id] || 1; }
+function canvasZoomIn(id) { canvasSetZoom(id, canvasGetZoom(id) * 1.25); }
+function canvasZoomOut(id) { canvasSetZoom(id, canvasGetZoom(id) * 0.8); }
+function canvasReset(id) { canvasSetZoom(id, 1); var vp = document.getElementById(id + '-vp'); if (vp) vp.scrollTop = 0; }
+function canvasFit(id) { var vp = document.getElementById(id + '-vp'), inner = document.getElementById(id + '-inner'); if (!vp || !inner) return; var hc = inner.classList.contains('hide-changes'), count = 0; inner.querySelectorAll('.div-col').forEach(function (col) { if (col.style.display === 'none') return; if (hc && col.classList.contains('hl-removed')) return; count++; }); if (count === 0) count = 1; canvasSetZoom(id, Math.max(0.3, Math.min(((vp.clientWidth - 20) / (count * 22 + (count - 1) * 0.6)) / BASE_FONT_SIZE, 2))); vp.scrollTop = 0; }
+function chartFilterDiv(id, val) { document.querySelectorAll('#' + id + '-inner .div-col').forEach(function (s) { s.style.display = (!val || s.dataset.div === val) ? '' : 'none'; }); }
+function chartFilterStatus(id, st) { document.querySelectorAll('#' + id + '-inner .div-col').forEach(function (s) { if (!st) { s.style.display = ''; return; } s.style.display = s.querySelector('.hl-' + st) ? '' : 'none'; }); }
+function chartSearch(id, s) { var q = s.toLowerCase(); document.querySelectorAll('#' + id + '-inner .div-col').forEach(function (sec) { sec.style.display = (!q || sec.textContent.toLowerCase().indexOf(q) !== -1) ? '' : 'none'; }); }
+
+function toggleChanges(cid) { var inner = document.getElementById(cid + '-inner'), btn = document.getElementById(cid + '-toggle-changes'); if (!inner || !btn) return; if (inner.classList.contains('hide-changes')) { inner.classList.remove('hide-changes'); btn.classList.add('toggle-active'); btn.textContent = '✦ Hide Changes'; } else { inner.classList.add('hide-changes'); btn.classList.remove('toggle-active'); btn.textContent = '✦ Show Changes'; } }
+
+function buildToolbarHtml(id, divList) {
+    var opts = divList.sort().map(function (d) { return '<option value="' + d + '">' + d + '</option>'; }).join('');
+    return '<div class="cv-toolbar"><button type="button" onclick="canvasZoomIn(\'' + id + '\')">+ Zoom In</button><button type="button" onclick="canvasZoomOut(\'' + id + '\')">− Zoom Out</button><span class="zlbl" id="' + id + '-zlbl">100%</span><button type="button" onclick="canvasFit(\'' + id + '\')">⊞ Fit</button><button type="button" onclick="canvasReset(\'' + id + '\')">↺ Reset</button><div class="tsep"></div><button type="button" id="' + id + '-toggle-changes" onclick="toggleChanges(\'' + id + '\')">✦ Show Changes</button><div class="tsep"></div><select onchange="chartFilterDiv(\'' + id + '\', this.value)"><option value="">All Divisions</option>' + opts + '</select><select onchange="chartFilterStatus(\'' + id + '\', this.value)"><option value="">All Statuses</option><option value="changed">Changed</option><option value="new">New</option><option value="removed">Departed</option></select><input placeholder="🔍 Search…" oninput="chartSearch(\'' + id + '\', this.value)"><span style="font-size:.68rem;color:#888;margin-left:auto">Click any box for details</span></div>';
+}
+
+/* ================================================================
+   CEO / EGM / DIV DATA BUILDERS
+   ================================================================ */
+
+function findCEO(data) { for (var i = 0; i < data.length; i++) { var jt = (data[i].job_title || '').toLowerCase(); if (jt.indexOf('chief executive officer') !== -1 || jt.indexOf('managing director & ceo') !== -1 || jt === 'ceo' || (jt.indexOf('chief executive') !== -1 && jt.indexOf('officer') !== -1)) return data[i].full_name; } for (var j = 0; j < data.length; j++) { if ((data[j].job_title || '').toLowerCase().indexOf('chief executive') !== -1) return data[j].full_name; } return ''; }
+
+function buildEGMData(data) { var filtered = getFilteredData(data), ceo = findCEO(data); var si = filtered.filter(function (r) { return r.theme_of_work === 'Strategic Intent'; }); var sd = filtered.filter(function (r) { return r.theme_of_work === 'Strategic Development'; }); var divMap = {}; si.forEach(function (r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = { name: dn, leader: r.full_name, peopleSet: new Set(), bus: {} }; divMap[dn].leader = r.full_name; }); filtered.filter(isRelevantTheme).forEach(function (r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = { name: dn, leader: '', peopleSet: new Set(), bus: {} }; if (r.full_name) divMap[dn].peopleSet.add(r.full_name); }); sd.forEach(function (r) { var dn = r.business_unit_name, bn = r.division_name; if (!dn || !bn) return; if (!divMap[dn]) divMap[dn] = { name: dn, leader: '', peopleSet: new Set(), bus: {} }; if (!divMap[dn].bus[bn]) divMap[dn].bus[bn] = { name: bn, person: r.full_name }; }); return { ceo: ceo, divisions: divMap }; }
+
+function buildDivDetailData(data) { var filtered = getFilteredData(data); var si = filtered.filter(function (r) { return r.theme_of_work === 'Strategic Intent'; }); var sd = filtered.filter(function (r) { return r.theme_of_work === 'Strategic Development'; }); var pr = filtered.filter(function (r) { return r.theme_of_work === 'Practice'; }); var divMap = {}; si.forEach(function (r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = { name: dn, leader: '', egms: {} }; divMap[dn].leader = r.full_name; }); sd.forEach(function (r) { var dn = r.business_unit_name, en = r.division_name; if (!dn || !en) return; if (!divMap[dn]) divMap[dn] = { name: dn, leader: '', egms: {} }; if (!divMap[dn].egms[en]) divMap[dn].egms[en] = { name: en, person: r.full_name, practices: {} }; }); pr.forEach(function (r) { var dn = r.business_unit_name, en = r.division_name, pn = r.department_name || r.division_name, per = r.full_name; if (!dn || !en) return; if (!divMap[dn]) divMap[dn] = { name: dn, leader: '', egms: {} }; if (!divMap[dn].egms[en]) divMap[dn].egms[en] = { name: en, person: '', practices: {} }; if (!divMap[dn].egms[en].practices[pn]) divMap[dn].egms[en].practices[pn] = { name: pn, people: new Set() }; if (per) divMap[dn].egms[en].practices[pn].people.add(per); }); return divMap; }
+
+/* ================================================================
+   MODAL
+   ================================================================ */
+
+function openModal(title, bodyHtml) { document.getElementById('modalTitle').textContent = title; document.getElementById('modalBody').innerHTML = bodyHtml; document.getElementById('detailModal').classList.add('active'); }
+function closeModal() { document.getElementById('detailModal').classList.remove('active'); }
+document.getElementById('detailModal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+function statusBadgeHtml(status) { var labels = { 'new': 'New', 'removed': 'Departed', 'changed': 'Changed', 'unchanged': 'Unchanged', 'title_changed': 'Title Changed', 'name_changed': 'Name Changed' }; return '<span class="modal-badge st-' + status + '">' + (labels[status] || status) + '</span>'; }
+
+function buildPersonChangeMap(divName, buName) { var map = {}; if (!COMPARISON) return map; COMPARISON.all.forEach(function (c) { var row = c.row || c.newRow, oldRow = c.oldRow || null, inScope = false; if (divName && buName) { if (row.business_unit_name === divName && row.division_name === buName) inScope = true; if (oldRow && oldRow.business_unit_name === divName && oldRow.division_name === buName) inScope = true; } else if (divName) { if (row.business_unit_name === divName) inScope = true; if (oldRow && oldRow.business_unit_name === divName) inScope = true; } if (!inScope) return; var name = row.full_name; if (name && !map[name]) map[name] = { type: c.type, change: c }; if (c.type === 'name_changed' && oldRow && oldRow.full_name && !map[oldRow.full_name]) map[oldRow.full_name] = { type: 'name_changed', change: c }; }); return map; }
+
+function treeLegendHtml() { return '<div class="modal-tree-legend"><span><span class="ml-dot" style="background:#4caf50"></span> New</span><span><span class="ml-dot" style="background:#f44336"></span> Departed</span><span><span class="ml-dot" style="background:#ff9800"></span> Moved</span><span><span class="ml-dot" style="background:#009688"></span> Title Changed</span><span><span class="ml-dot" style="background:#7b1fa2"></span> Name Changed</span></div>'; }
+
+function buildHierarchyTree(data, divName, buName, changeMap) { var filtered = getFilteredData(data).filter(isRelevantTheme); var scoped = buName ? filtered.filter(function (r) { return r.business_unit_name === divName && r.division_name === buName; }) : filtered.filter(function (r) { return r.business_unit_name === divName; }); var tree = {}; scoped.forEach(function (r) { var dept = r.department_name || '(No Department)', team = r.team_name || '(No Team)'; if (!tree[dept]) tree[dept] = {}; if (!tree[dept][team]) tree[dept][team] = []; tree[dept][team].push({ name: r.full_name, title: r.job_title || '', theme: r.theme_of_work }); }); var oldFiltered = getFilteredData(OLD_DATA).filter(isRelevantTheme); var oldScoped = buName ? oldFiltered.filter(function (r) { return r.business_unit_name === divName && r.division_name === buName; }) : oldFiltered.filter(function (r) { return r.business_unit_name === divName; }); oldScoped.forEach(function (r) { if (!r.full_name) return; var info = changeMap[r.full_name]; if (info && info.type === 'removed') { var dept = r.department_name || '(No Department)', team = r.team_name || '(No Team)'; if (!tree[dept]) tree[dept] = {}; if (!tree[dept][team]) tree[dept][team] = []; if (!tree[dept][team].some(function (p) { return p.name === r.full_name; })) tree[dept][team].push({ name: r.full_name, title: r.job_title || '', theme: r.theme_of_work, isRemoved: true }); } }); if (!Object.keys(tree).length) return '<p style="color:#999;font-size:0.78rem">No people found.</p>'; var html = '<div class="modal-tree">'; var badgeLabels = { 'new': 'NEW', 'removed': 'DEPARTED', 'moved': 'MOVED', 'title_changed': 'TITLE', 'name_changed': 'NAME' }; Object.keys(tree).sort().forEach(function (dept) { html += '<div class="tree-node"><div class="tree-label tl-dept">📂 ' + dept + '</div>'; Object.keys(tree[dept]).sort().forEach(function (team) { html += '<div class="tree-node"><div class="tree-label tl-team">👥 ' + team + '</div>'; tree[dept][team].sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (p) { var info = changeMap[p.name], cls = '', badge = '', extra = ''; if (info) { cls = ' tp-' + info.type; badge = ' <span class="tp-badge tpb-' + info.type + '">' + (badgeLabels[info.type] || '') + '</span>'; if (info.type === 'name_changed' && info.change && info.change.oldRow) extra = ' <span style="font-size:0.65rem;color:#7b1fa2">(was: ' + info.change.oldRow.full_name + ')</span>'; } html += '<div class="tree-person' + cls + '">' + p.name + (p.title ? ' <span class="modal-job-title">(' + p.title + ')</span>' : '') + badge + extra + '</div>'; }); html += '</div>'; }); html += '</div>'; }); return html + '</div>'; }
+
+/* ================================================================
+   MODAL CONTENT BUILDERS
+   ================================================================ */
+
+function showCEOModal() { var newCEO = findCEO(NEW_DATA), oldCEO = findCEO(OLD_DATA), newTitle = getJobTitle(NEW_DATA, newCEO), oldTitle = getJobTitle(OLD_DATA, oldCEO); var status = 'unchanged'; if (newCEO && !oldCEO) status = 'new'; else if (!newCEO && oldCEO) status = 'removed'; else if (newCEO !== oldCEO) status = 'changed'; var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div><div class="modal-section"><h4>CEO</h4><p><b>' + (newCEO || oldCEO || 'Unknown') + '</b></p>' + (newTitle ? '<p class="modal-job-title">' + newTitle + '</p>' : '') + '</div>'; if (status === 'changed') html += '<div class="modal-section"><h4>Change Detail</h4><div class="modal-change-row"><span class="modal-change-old">' + oldCEO + (oldTitle ? ' (' + oldTitle + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + newCEO + (newTitle ? ' (' + newTitle + ')' : '') + '</span></div></div>'; html += '<div class="modal-section"><h4>Organisation</h4><p>Insurance Australia Group</p></div>'; openModal('CEO Details', html); }
+
+function showDivModal(divName) { var newEGM = buildEGMData(NEW_DATA), oldEGM = buildEGMData(OLD_DATA); var newDiv = newEGM.divisions[divName] || null, oldDiv = oldEGM.divisions[divName] || null; var status = 'unchanged'; if (newDiv && !oldDiv) status = 'new'; else if (!newDiv && oldDiv) status = 'removed'; else if (newDiv && oldDiv && newDiv.leader !== oldDiv.leader) status = 'changed'; var leader = newDiv ? newDiv.leader : (oldDiv ? oldDiv.leader : ''), lt = getJobTitleInContext(NEW_DATA, leader, divName, ''), empCount = newDiv ? newDiv.peopleSet.size : 0; var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div><div class="modal-section"><h4>Strategic Intent Leader</h4><p><b>' + (leader || 'Unknown') + '</b></p>' + (lt ? '<p class="modal-job-title">' + lt + '</p>' : '') + '</div>'; if (status === 'changed') { var ol = oldDiv ? oldDiv.leader : '', olt = getJobTitleInContext(OLD_DATA, ol, divName, ''); html += '<div class="modal-section"><h4>Leader Change</h4><div class="modal-change-row"><span class="modal-change-old">' + ol + (olt ? ' (' + olt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + leader + (lt ? ' (' + lt + ')' : '') + '</span></div></div>'; } html += '<div class="modal-section"><h4>Employee Count</h4><span class="modal-people-count">' + empCount + ' people</span></div><div class="modal-section"><h4>Hierarchy</h4><p>📁 ' + divName + '</p></div>'; var busObj = newDiv ? newDiv.bus : (oldDiv ? oldDiv.bus : {}), buNames = Object.keys(busObj).sort(); if (buNames.length) html += '<div class="modal-section"><h4>Business Units (' + buNames.length + ')</h4><ul>' + buNames.map(function (b) { var bt = getJobTitleInContext(NEW_DATA, busObj[b].person, divName, b); return '<li><b>' + b + '</b> — ' + (busObj[b].person || 'TBC') + (bt ? ' <span class="modal-job-title">(' + bt + ')</span>' : '') + '</li>'; }).join('') + '</ul></div>'; var changeMap = buildPersonChangeMap(divName, ''); html += '<div class="modal-section"><h4>People (' + empCount + ')</h4>' + treeLegendHtml() + buildHierarchyTree(NEW_DATA, divName, '', changeMap) + '</div>'; openModal(divName, html); }
+
+function showBUModal(divName, buName, person, status, oldPerson) { var pt = getJobTitleInContext(NEW_DATA, person, divName, buName), opt = oldPerson ? getJobTitleInContext(OLD_DATA, oldPerson, divName, buName) : ''; var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div><div class="modal-section"><h4>Strategic Development Lead</h4><p><b>' + (person || 'TBC') + '</b></p>' + (pt ? '<p class="modal-job-title">' + pt + '</p>' : '') + '</div>'; if (status === 'changed' && oldPerson) html += '<div class="modal-section"><h4>Lead Change</h4><div class="modal-change-row"><span class="modal-change-old">' + oldPerson + (opt ? ' (' + opt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + person + (pt ? ' (' + pt + ')' : '') + '</span></div></div>'; html += '<div class="modal-section"><h4>Hierarchy</h4><p>📁 ' + divName + ' → 📂 ' + buName + '</p></div>'; var changeMap = buildPersonChangeMap(divName, buName); html += '<div class="modal-section"><h4>People</h4>' + treeLegendHtml() + buildHierarchyTree(NEW_DATA, divName, buName, changeMap) + '</div>'; openModal(buName, html); }
+
+function showEGMModal(divName, egmName, person, status, oldPerson) { var pt = getJobTitleInContext(NEW_DATA, person, divName, egmName), opt = oldPerson ? getJobTitleInContext(OLD_DATA, oldPerson, divName, egmName) : ''; var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div><div class="modal-section"><h4>EGM / Strategic Development Lead</h4><p><b>' + (person || 'TBC') + '</b></p>' + (pt ? '<p class="modal-job-title">' + pt + '</p>' : '') + '</div>'; if (status === 'changed' && oldPerson) html += '<div class="modal-section"><h4>Lead Change</h4><div class="modal-change-row"><span class="modal-change-old">' + oldPerson + (opt ? ' (' + opt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + person + (pt ? ' (' + pt + ')' : '') + '</span></div></div>'; html += '<div class="modal-section"><h4>Hierarchy</h4><p>📁 ' + divName + ' → 📂 ' + egmName + '</p></div>'; var changeMap = buildPersonChangeMap(divName, egmName); html += '<div class="modal-section"><h4>People</h4>' + treeLegendHtml() + buildHierarchyTree(NEW_DATA, divName, egmName, changeMap) + '</div>'; openModal(egmName, html); }
+
+function showPracModal(divName, egmName, pracName, peopleArr, status, oldPeopleArr) { var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div><div class="modal-section"><h4>Practice / Department</h4><p><b>' + pracName + '</b></p></div><div class="modal-section"><h4>Hierarchy</h4><p>📁 ' + divName + ' → 📂 ' + egmName + ' → 📄 ' + pracName + '</p></div>'; var changeMap = buildPersonChangeMap(divName, egmName); var badgeLabels = { 'new': 'NEW', 'removed': 'DEPARTED', 'moved': 'MOVED', 'title_changed': 'TITLE', 'name_changed': 'NAME' }; var cp = peopleArr.map(function (n) { var info = changeMap[n]; return { name: n, title: getJobTitleInContext(NEW_DATA, n, divName, egmName), changeType: info ? info.type : '', change: info ? info.change : null }; }); if (oldPeopleArr && oldPeopleArr.length) { oldPeopleArr.forEach(function (n) { var info = changeMap[n]; if (info && info.type === 'removed' && !cp.some(function (p) { return p.name === n; })) cp.push({ name: n, title: getJobTitleInContext(OLD_DATA, n, divName, egmName), changeType: 'removed', change: info ? info.change : null }); }); } cp.sort(function (a, b) { return a.name.localeCompare(b.name); }); html += '<div class="modal-section"><h4>People (' + peopleArr.length + ')</h4>' + treeLegendHtml(); if (!cp.length) html += '<p style="color:#999;font-size:0.78rem">No people found.</p>'; else { html += '<div class="modal-tree">'; cp.forEach(function (p) { var cls = p.changeType ? ' tp-' + p.changeType : '', badge = p.changeType ? ' <span class="tp-badge tpb-' + p.changeType + '">' + (badgeLabels[p.changeType] || '') + '</span>' : '', extra = ''; if (p.changeType === 'name_changed' && p.change && p.change.oldRow) extra = ' <span style="font-size:0.65rem;color:#7b1fa2">(was: ' + p.change.oldRow.full_name + ')</span>'; html += '<div class="tree-person' + cls + '">' + p.name + (p.title ? ' <span class="modal-job-title">(' + p.title + ')</span>' : '') + badge + extra + '</div>'; }); html += '</div>'; } html += '</div>'; openModal(pracName, html); }
+
+// END OF PART 2
+/* ================================================================
+   HELPER: escape single quotes for onclick attributes
+   ================================================================ */
+
+function esc(s) {
+    return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+/* ================================================================
+   HELPER: setsEqual for practice comparison
+   ================================================================ */
+
+function setsEqual(setA, setB) {
+    if (setA.size !== setB.size) return false;
+    var equal = true;
+    setA.forEach(function (v) { if (!setB.has(v)) equal = false; });
+    return equal;
+}
+
+function formatPeopleSet(set) {
+    return Array.from(set).join(', ');
+}
+
+/* ================================================================
+   EGM CHART RENDERER (BU – CE & EGM tab)
+   ================================================================ */
+
+function renderEGMChart() {
+    var container = document.getElementById('t-egm');
+    var newEGM = buildEGMData(NEW_DATA), oldEGM = buildEGMData(OLD_DATA);
+
+    var allDivsObj = {};
+    Object.keys(newEGM.divisions).forEach(function (k) { allDivsObj[k] = true; });
+    Object.keys(oldEGM.divisions).forEach(function (k) { allDivsObj[k] = true; });
+    var allDivs = Object.keys(allDivsObj);
+
+    var ceoHL = '';
+    if (newEGM.ceo && oldEGM.ceo && newEGM.ceo !== oldEGM.ceo) ceoHL = 'hl-changed';
+    else if (newEGM.ceo && !oldEGM.ceo) ceoHL = 'hl-new';
+
+    var ceoBanner = '<div class="ceo-banner ' + ceoHL + '" onclick="showCEOModal()">' +
+        '<div class="nt">Insurance Australia Group</div>' +
+        '<div class="np">(' + (newEGM.ceo || 'Unknown') + ')</div></div>';
+
+    var columnsHtml = '';
+    var currentDivNames = sortDivNames(Object.keys(newEGM.divisions));
+
+    currentDivNames.forEach(function (divName) {
+        var divNode = newEGM.divisions[divName];
+        var oldDiv = oldEGM.divisions[divName] || null;
+        var divHL = '';
+        if (!oldDiv) divHL = 'hl-new';
+        else if (oldDiv.leader !== divNode.leader) divHL = 'hl-changed';
+
+        columnsHtml += '<div class="div-col" data-div="' + divName + '">';
+        columnsHtml += '<div class="div-col-hdr ' + divHL + '" onclick="showDivModal(\'' + esc(divName) + '\')">' +
+            '<div class="nt">' + divName + '</div>' +
+            '<div class="np">' + (divNode.leader || '') + '</div>' +
+            '<div class="np" style="opacity:0.7">~' + divNode.peopleSet.size + ' employees</div></div>';
+
+        Object.keys(divNode.bus).sort().forEach(function (buName) {
+            var buEntry = divNode.bus[buName];
+            var oldBU = oldDiv ? (oldDiv.bus[buName] || null) : null;
+            var buHL = '', buStatus = 'unchanged', oldPerson = '';
+            if (!oldBU) { buHL = 'hl-new'; buStatus = 'new'; }
+            else if (oldBU.person !== buEntry.person) { buHL = 'hl-changed'; buStatus = 'changed'; oldPerson = oldBU.person; }
+
+            columnsHtml += '<div class="egm-bu-box ' + buHL + '" ' +
+                'onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' +
+                    esc(buEntry.person || '') + '\',\'' + buStatus + '\',\'' + esc(oldPerson) + '\')">' +
+                '<div class="nt">' + buName + '</div>' +
+                '<div class="np">' + (buEntry.person || '') + '</div></div>';
+        });
+
+        if (oldDiv) {
+            Object.keys(oldDiv.bus).sort().forEach(function (buName) {
+                if (divNode.bus[buName]) return;
+                columnsHtml += '<div class="egm-bu-box hl-removed" ' +
+                    'onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' +
+                        esc(oldDiv.bus[buName].person || '') + '\',\'removed\',\'\')">' +
+                    '<div class="nt">' + buName + '</div><div class="np">DEPARTED</div></div>';
+            });
+        }
+        columnsHtml += '</div>';
+    });
+
+    // Departed divisions
+    Object.keys(oldEGM.divisions).sort().forEach(function (divName) {
+        if (newEGM.divisions[divName]) return;
+        if (shouldExclude(divName)) return;
+        var oldDiv = oldEGM.divisions[divName];
+        columnsHtml += '<div class="div-col hl-removed" data-div="' + divName + '">';
+        columnsHtml += '<div class="div-col-hdr hl-removed" onclick="showDivModal(\'' + esc(divName) + '\')">' +
+            '<div class="nt">' + divName + '</div><div class="np">' + (oldDiv.leader || '') + ' — DEPARTED</div></div>';
+        Object.keys(oldDiv.bus).sort().forEach(function (buName) {
+            columnsHtml += '<div class="egm-bu-box hl-removed" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' + esc(oldDiv.bus[buName].person || '') + '\',\'removed\',\'\')">' +
+                '<div class="nt">' + buName + '</div><div class="np">DEPARTED</div></div>';
+        });
+        columnsHtml += '</div>';
+    });
+
+    container.innerHTML =
+        '<h2 style="margin-bottom:6px;color:var(--purple-dark)">🏢 Business Unit – Chief Executive &amp; EGM</h2>' +
+        filterBannerHtml() +
+        '<div class="key-box">' +
+            '<div class="key-item"><div class="key-sw" style="background:#c8e6c9;border-color:#4caf50"></div> New</div>' +
+            '<div class="key-item"><div class="key-sw" style="background:#ffebee;border-color:#f44336"></div> Departed</div>' +
+            '<div class="key-item"><div class="key-sw" style="background:#fff8e1;border-color:#ff9800"></div> Changed</div>' +
+        '</div>' +
+        buildToolbarHtml('egm', allDivs) +
+        '<div class="cv-viewport" id="egm-vp"><div class="cv-inner hide-changes" id="egm-inner">' +
+            ceoBanner + '<div class="div-columns">' + columnsHtml + '</div></div></div>';
+
+    canvasZoomLevels['egm'] = 1;
+    if (ACTIVE_DIV_FILTER) chartFilterDiv('egm', ACTIVE_DIV_FILTER);
+}
+
+/* ================================================================
+   DIVISION EGMs & EMs CHART RENDERER
+   ================================================================ */
+
+function renderDivisionChart() {
+    var container = document.getElementById('t-div');
+    var newDetail = buildDivDetailData(NEW_DATA), oldDetail = buildDivDetailData(OLD_DATA);
+
+    var allDivsObj = {};
+    Object.keys(newDetail).forEach(function (k) { allDivsObj[k] = true; });
+    Object.keys(oldDetail).forEach(function (k) { allDivsObj[k] = true; });
+    var allDivs = Object.keys(allDivsObj);
+
+    var columnsHtml = '';
+    var sortedDivs = sortDivNames(Object.keys(newDetail));
+
+    sortedDivs.forEach(function (divName) {
+        var divNode = newDetail[divName];
+        var oldDiv = oldDetail[divName] || null;
+        var divHL = '';
+        if (!oldDiv) divHL = 'hl-new';
+        else if (oldDiv.leader !== divNode.leader) divHL = 'hl-changed';
+
+        columnsHtml += '<div class="div-col" data-div="' + divName + '">';
+        columnsHtml += '<div class="div-col-hdr ' + divHL + '" onclick="showDivModal(\'' + esc(divName) + '\')">' +
+            '<div class="nt">' + divName + '</div><div class="np">' + (divNode.leader || '') + '</div></div>';
+
+        Object.keys(divNode.egms).sort().forEach(function (egmName) {
+            var egmNode = divNode.egms[egmName];
+            var oldEgm = oldDiv ? (oldDiv.egms[egmName] || null) : null;
+            var egmHL = '', egmStatus = 'unchanged', oldEgmPerson = '';
+            if (!oldEgm) { egmHL = 'hl-new'; egmStatus = 'new'; }
+            else if (oldEgm.person !== egmNode.person) { egmHL = 'hl-changed'; egmStatus = 'changed'; oldEgmPerson = oldEgm.person; }
+
+            columnsHtml += '<div class="egm-box">';
+            columnsHtml += '<div class="egm-box-hdr ' + egmHL + '" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(egmNode.person || '') + '\',\'' + egmStatus + '\',\'' + esc(oldEgmPerson) + '\')">' +
+                '<div class="nt">' + egmName + '</div><div class="np">' + (egmNode.person || '') + '</div></div>';
+
+            columnsHtml += '<div class="prac-grid">';
+
+            Object.keys(egmNode.practices).sort().forEach(function (pracName) {
+                var pracEntry = egmNode.practices[pracName];
+                var oldPrac = oldEgm ? (oldEgm.practices[pracName] || null) : null;
+                var pracHL = '', pracStatus = 'unchanged', oldPeopleArr = [];
+                if (!oldPrac) { pracHL = 'hl-new'; pracStatus = 'new'; }
+                else if (!setsEqual(oldPrac.people, pracEntry.people)) {
+                    pracHL = 'hl-changed'; pracStatus = 'changed';
+                    oldPeopleArr = Array.from(oldPrac.people);
+                }
+
+                var peopleArr = Array.from(pracEntry.people);
+                var pj = JSON.stringify(peopleArr).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                var opj = JSON.stringify(oldPeopleArr).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+                columnsHtml += '<div class="prac-box ' + pracHL + '" onclick="showPracModalFromAttr(this)" ' +
+                    'data-div="' + esc(divName) + '" data-egm="' + esc(egmName) + '" data-prac="' + esc(pracName) + '" ' +
+                    'data-people="' + pj + '" data-status="' + pracStatus + '" data-old-people="' + opj + '">' +
+                    '<div class="nt">' + pracEntry.name + '</div><div class="np">' + formatPeopleSet(pracEntry.people) + '</div></div>';
+            });
+
+            // Departed practices
+            if (oldEgm) {
+                Object.keys(oldEgm.practices).sort().forEach(function (pracName) {
+                    if (egmNode.practices[pracName]) return;
+                    var oldPrac = oldEgm.practices[pracName];
+                    var opArr = Array.from(oldPrac.people);
+                    var opj = JSON.stringify(opArr).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" ' +
+                        'data-div="' + esc(divName) + '" data-egm="' + esc(egmName) + '" data-prac="' + esc(pracName) + '" ' +
+                        'data-people="[]" data-status="removed" data-old-people="' + opj + '">' +
+                        '<div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>';
+                });
+            }
+
+            columnsHtml += '</div></div>'; // prac-grid + egm-box
+        });
+
+        // Departed EGMs
+        if (oldDiv) {
+            Object.keys(oldDiv.egms).sort().forEach(function (egmName) {
+                if (divNode.egms[egmName]) return;
+                var oldEgm = oldDiv.egms[egmName];
+                columnsHtml += '<div class="egm-box">';
+                columnsHtml += '<div class="egm-box-hdr hl-removed" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(oldEgm.person || '') + '\',\'removed\',\'\')">' +
+                    '<div class="nt">' + egmName + '</div><div class="np">' + (oldEgm.person || '') + ' — DEPARTED</div></div>';
+
+                var pk = Object.keys(oldEgm.practices);
+                if (pk.length > 0) {
+                    columnsHtml += '<div class="prac-grid">';
+                    pk.sort().forEach(function (pracName) {
+                        var oldPrac = oldEgm.practices[pracName];
+                        var opArr = Array.from(oldPrac.people);
+                        var opj = JSON.stringify(opArr).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" ' +
+                            'data-div="' + esc(divName) + '" data-egm="' + esc(egmName) + '" data-prac="' + esc(pracName) + '" ' +
+                            'data-people="[]" data-status="removed" data-old-people="' + opj + '">' +
+                            '<div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>';
+                    });
+                    columnsHtml += '</div>';
+                }
+                columnsHtml += '</div>';
+            });
+        }
+
+        columnsHtml += '</div>'; // div-col
+    });
+
+    // Departed divisions
+    Object.keys(oldDetail).sort().forEach(function (divName) {
+        if (newDetail[divName]) return;
+        if (shouldExclude(divName)) return;
+        var oldDiv = oldDetail[divName];
+
+        columnsHtml += '<div class="div-col hl-removed" data-div="' + divName + '">';
+        columnsHtml += '<div class="div-col-hdr hl-removed" onclick="showDivModal(\'' + esc(divName) + '\')">' +
+            '<div class="nt">' + divName + '</div><div class="np">' + (oldDiv.leader || '') + ' — DEPARTED</div></div>';
+
+        Object.keys(oldDiv.egms).sort().forEach(function (egmName) {
+            var oldEgm = oldDiv.egms[egmName];
+            columnsHtml += '<div class="egm-box">';
+            columnsHtml += '<div class="egm-box-hdr hl-removed" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(oldEgm.person || '') + '\',\'removed\',\'\')">' +
+                '<div class="nt">' + egmName + '</div><div class="np">' + (oldEgm.person || '') + '</div></div>';
+
+            var pk = Object.keys(oldEgm.practices);
+            if (pk.length > 0) {
+                columnsHtml += '<div class="prac-grid">';
+                pk.sort().forEach(function (pracName) {
+                    var oldPrac = oldEgm.practices[pracName];
+                    var opArr = Array.from(oldPrac.people);
+                    var opj = JSON.stringify(opArr).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" ' +
+                        'data-div="' + esc(divName) + '" data-egm="' + esc(egmName) + '" data-prac="' + esc(pracName) + '" ' +
+                        'data-people="[]" data-status="removed" data-old-people="' + opj + '">' +
+                        '<div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>';
+                });
+                columnsHtml += '</div>';
+            }
+            columnsHtml += '</div>';
+        });
+
+        columnsHtml += '</div>';
+    });
+
+    container.innerHTML =
+        '<h2 style="margin-bottom:6px;color:var(--purple-dark)">🏗️ Division EGMs &amp; EMs</h2>' +
+        filterBannerHtml() +
+        '<div class="key-box">' +
+            '<div class="key-item"><div class="key-sw" style="background:#c8e6c9;border-color:#4caf50"></div> New</div>' +
+            '<div class="key-item"><div class="key-sw" style="background:#ffebee;border-color:#f44336"></div> Departed</div>' +
+            '<div class="key-item"><div class="key-sw" style="background:#fff8e1;border-color:#ff9800"></div> Changed</div>' +
+        '</div>' +
+        buildToolbarHtml('div', allDivs) +
+        '<div class="cv-viewport" id="div-vp"><div class="cv-inner hide-changes" id="div-inner">' +
+            '<div class="div-columns">' + columnsHtml + '</div></div></div>';
+
+    canvasZoomLevels['div'] = 1;
+    if (ACTIVE_DIV_FILTER) chartFilterDiv('div', ACTIVE_DIV_FILTER);
+}
+
+/* ================================================================
+   Practice modal helper
+   ================================================================ */
+
+function showPracModalFromAttr(el) {
+    var divName = el.getAttribute('data-div');
+    var egmName = el.getAttribute('data-egm');
+    var pracName = el.getAttribute('data-prac');
+    var status = el.getAttribute('data-status');
+    var peopleArr = [], oldPeopleArr = [];
+    try { peopleArr = JSON.parse(el.getAttribute('data-people')); } catch (e) {}
+    try { oldPeopleArr = JSON.parse(el.getAttribute('data-old-people')); } catch (e) {}
+    showPracModal(divName, egmName, pracName, peopleArr, status, oldPeopleArr);
+}
+
+/* ================================================================
+   CSV EXPORT
+   ================================================================ */
+
+function exportTab(tabId, themeName) {
+    var table = document.querySelector('#t-' + tabId + ' table');
+    if (!table) { alert('No data to export.'); return; }
+    downloadCSV(table, themeName.replace(/\s+/g, '_') + '_changes.csv');
+}
+
+function exportAllChanges() {
+    var table = document.getElementById('atbl');
+    if (!table) { alert('No data to export.'); return; }
+    downloadCSV(table, 'all_changes.csv');
+}
+
+function downloadCSV(table, filename) {
+    var rows = table.querySelectorAll('tr');
+    var csvLines = [];
+    rows.forEach(function (row) {
+        var cells = row.querySelectorAll('th, td');
+        var values = [];
+        cells.forEach(function (cell) {
+            var text = cell.textContent.replace(/"/g, '""').replace(/\n/g, ' ').trim();
+            values.push('"' + text + '"');
+        });
+        csvLines.push(values.join(','));
+    });
+    var blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+}
+
+</script>
+</body>
+</html>
