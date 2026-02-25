@@ -277,7 +277,7 @@
     </style>
 </head>
 <body>
-<div class="header"><div><h1>🔗 Connect the Dots</h1><div class="sub">Organisational Change Analysis</div></div><div style="font-size:0.7rem;opacity:0.7;">v33.1</div></div>
+<div class="header"><div><h1>🔗 Connect the Dots</h1><div class="sub">Organisational Change Analysis</div></div><div style="font-size:0.7rem;opacity:0.7;">v34.0</div></div>
 <div class="upload-section"><div class="upload-box"><label>📁 Old File (Baseline)</label><input type="file" id="oldFile" accept=".xlsx,.xls,.csv"></div><div class="upload-box"><label>📁 New File (Current)</label><input type="file" id="newFile" accept=".xlsx,.xls,.csv"></div><button class="btn-compare" onclick="run()">🔍 Compare Files</button></div>
 <div id="loader" class="loading" style="display:none;"><span class="spinner"></span> Analysing…</div>
 <div id="results">
@@ -351,6 +351,9 @@ function toggleSection(id) { var body = document.getElementById(id), hdr = body.
 function filterBannerHtml() { if (!ACTIVE_DIV_FILTER) return ''; return '<div style="background:#fff3e0;border:1px solid #ff9800;border-radius:5px;padding:6px 12px;margin-bottom:8px;font-size:0.78rem;color:#e65100">⚡ Filtered to: <b>' + ACTIVE_DIV_FILTER + '</b></div>'; }
 function getChangeTypeDisplay(type) { switch(type) { case 'new': return {rc:'row-new',bc:'b-new',bt:'NEW'}; case 'removed': return {rc:'row-removed',bc:'b-rem',bt:'DEPARTED'}; case 'moved': return {rc:'row-moved',bc:'b-moved',bt:'MOVED'}; case 'title_changed': return {rc:'row-title_changed',bc:'b-title',bt:'TITLE CHANGED'}; case 'name_changed': return {rc:'row-name_changed',bc:'b-name',bt:'NAME CHANGED'}; default: return {rc:'',bc:'',bt:type}; } }
 
+/* ================================================================
+   COMPARISON ENGINE
+   ================================================================ */
 function compareData(oldRows, newRows) {
     var oldFiltered = oldRows.filter(isRelevantTheme), newFiltered = newRows.filter(isRelevantTheme);
     var oldKeySet = new Set(oldFiltered.map(rowKey)), newKeySet = new Set(newFiltered.map(rowKey));
@@ -365,23 +368,32 @@ function compareData(oldRows, newRows) {
     var matchedOld = new Set(), matchedNew = new Set();
     function buildDiffs(o,n) { var d = []; COLS.forEach(function(c) { if (c === 'full_name') return; if (o[c] !== n[c]) d.push({field:c, oldVal:o[c], newVal:n[c]}); }); if (o.job_title !== n.job_title) d.push({field:'job_title', oldVal:o.job_title, newVal:n.job_title}); return d; }
     var unmatchedNew = []; newFiltered.forEach(function(nr) { if (!oldKeySet.has(rowKey(nr))) unmatchedNew.push(nr); });
+    // PASS 1: TITLE CHANGED
     var after1 = [];
     unmatchedNew.forEach(function(nr) { var cands = oldPosMap.get(positionKey(nr)) || [], match = null; for (var i = 0; i < cands.length; i++) { if (cands[i].job_title !== nr.job_title && !matchedOld.has(rowKey(cands[i]))) { match = cands[i]; break; } } if (match) { var tc = {type:'title_changed', oldRow:match, newRow:nr, theme:nr.theme_of_work, changes:[{field:'job_title', oldVal:match.job_title, newVal:nr.job_title}]}; results.titleChanged.push(tc); results.all.push(tc); if (results.themeMap[tc.theme]) results.themeMap[tc.theme].push(tc); matchedOld.add(rowKey(match)); matchedNew.add(rowKey(nr)); } else { after1.push(nr); } });
+    // PASS 2: SAME-THEME MOVE
     var after2 = [];
     after1.forEach(function(nr) { var cands = oldPersThemeMap.get(personThemeKey(nr)) || [], pnpk = positionNoPersonKey(nr), mf = null; for (var j = 0; j < cands.length; j++) { if (positionNoPersonKey(cands[j]) !== pnpk && !matchedOld.has(rowKey(cands[j]))) { mf = cands[j]; break; } } if (mf) { var mc = {type:'moved', oldRow:mf, newRow:nr, theme:nr.theme_of_work, changes:buildDiffs(mf, nr)}; results.moved.push(mc); results.all.push(mc); if (results.themeMap[mc.theme]) results.themeMap[mc.theme].push(mc); matchedOld.add(rowKey(mf)); matchedNew.add(rowKey(nr)); } else { after2.push(nr); } });
+    // PASS 3: CROSS-THEME MOVE
     var after3 = [];
     after2.forEach(function(nr) { var cands = oldPersNameMap.get(personNameKey(nr)) || [], mf = null; for (var k = 0; k < cands.length; k++) { var c = cands[k]; if (!matchedOld.has(rowKey(c)) && positionKey(c) !== positionKey(nr)) { mf = c; break; } } if (mf) { var mc = {type:'moved', oldRow:mf, newRow:nr, theme:nr.theme_of_work, changes:buildDiffs(mf, nr)}; results.moved.push(mc); results.all.push(mc); if (results.themeMap[mc.theme]) results.themeMap[mc.theme].push(mc); matchedOld.add(rowKey(mf)); matchedNew.add(rowKey(nr)); } else { after3.push(nr); } });
+    // PASS 4: NAME CHANGED
     var newByPTKey = new Map(); after3.forEach(function(nr) { var ptk = positionWithTitleKey(nr); if (!newByPTKey.has(ptk)) newByPTKey.set(ptk, []); newByPTKey.get(ptk).push(nr); });
     var oldUnByPTKey = new Map(); oldFiltered.forEach(function(or) { var rk = rowKey(or); if (newKeySet.has(rk) || matchedOld.has(rk)) return; var ptk = positionWithTitleKey(or); if (!oldUnByPTKey.has(ptk)) oldUnByPTKey.set(ptk, []); oldUnByPTKey.get(ptk).push(or); });
     var after4 = [];
     after3.forEach(function(nr) { if (matchedNew.has(rowKey(nr))) return; var ptk = positionWithTitleKey(nr); var uN = (newByPTKey.get(ptk) || []).filter(function(r) { return !matchedNew.has(rowKey(r)); }); var uO = (oldUnByPTKey.get(ptk) || []).filter(function(r) { return !matchedOld.has(rowKey(r)); }); if (uN.length === 1 && uO.length === 1 && uO[0].full_name !== nr.full_name) { var nc = {type:'name_changed', oldRow:uO[0], newRow:nr, theme:nr.theme_of_work, changes:[{field:'full_name', oldVal:uO[0].full_name, newVal:nr.full_name}]}; results.nameChanged.push(nc); results.all.push(nc); if (results.themeMap[nc.theme]) results.themeMap[nc.theme].push(nc); matchedOld.add(rowKey(uO[0])); matchedNew.add(rowKey(nr)); return; } after4.push(nr); });
+    // PASS 5: NEW
     after4.forEach(function(nr) { if (matchedNew.has(rowKey(nr))) return; var nc = {type:'new', row:nr, theme:nr.theme_of_work}; results.added.push(nc); results.all.push(nc); if (results.themeMap[nc.theme]) results.themeMap[nc.theme].push(nc); });
+    // PASS 6: DEPARTED
     oldFiltered.forEach(function(or) { var rk = rowKey(or); if (newKeySet.has(rk) || matchedOld.has(rk)) return; var rc = {type:'removed', row:or, theme:or.theme_of_work}; results.removed.push(rc); results.all.push(rc); if (results.themeMap[rc.theme]) results.themeMap[rc.theme].push(rc); });
     results.stats = { oldTotal: oldRows.length, newTotal: newRows.length, oldThemed: oldFiltered.length, newThemed: newFiltered.length, added: results.added.length, removed: results.removed.length, moved: results.moved.length, titleChanged: results.titleChanged.length, nameChanged: results.nameChanged.length, total: results.all.length };
     THEMES.forEach(function(t) { results.stats['t_' + THEME_TAB_MAP[t]] = results.themeMap[t].length; });
     return results;
 }
 
+/* ================================================================
+   NET CHANGE + HEATMAP
+   ================================================================ */
 function buildNetChange(r) { var divMap = {}; function ensureDiv(d) { if (!d || shouldExclude(d)) return null; if (!divMap[d]) divMap[d] = {added:0, removed:0, moved_in:0, moved_out:0, titleChanged:0, nameChanged:0}; return divMap[d]; } r.added.forEach(function(c) { var e = ensureDiv((c.row || c.newRow).business_unit_name); if (e) e.added++; }); r.removed.forEach(function(c) { var e = ensureDiv(c.row.business_unit_name); if (e) e.removed++; }); r.titleChanged.forEach(function(c) { var e = ensureDiv(c.newRow.business_unit_name); if (e) e.titleChanged++; }); r.nameChanged.forEach(function(c) { var e = ensureDiv(c.newRow.business_unit_name); if (e) e.nameChanged++; }); r.moved.forEach(function(c) { var od = c.oldRow.business_unit_name, nd = c.newRow.business_unit_name; if (od !== nd) { var eO = ensureDiv(od); if (eO) eO.moved_out++; var eN = ensureDiv(nd); if (eN) eN.moved_in++; } }); return divMap; }
 function renderNetChangeTable(r) { var divMap = buildNetChange(r), divNames = sortDivNames(Object.keys(divMap)); if (!divNames.length) return '<p style="color:#999;padding:6px">No division data.</p>'; var tA = 0, tR = 0, tI = 0, tO = 0; var h = '<table class="net-tbl"><thead><tr><th>Division</th><th>New</th><th>Departed</th><th>Moved In</th><th>Moved Out</th><th>Net Change</th><th>Title Changed</th><th>Name Changed</th></tr></thead><tbody>'; divNames.forEach(function(d) { var e = divMap[d], net = e.added - e.removed + e.moved_in - e.moved_out; var cls = net > 0 ? 'net-positive' : (net < 0 ? 'net-negative' : 'net-zero'); var sign = net > 0 ? '+' : ''; tA += e.added; tR += e.removed; tI += e.moved_in; tO += e.moved_out; h += '<tr><td><b>' + d + '</b></td><td style="color:#2e7d32">' + e.added + '</td><td style="color:#c62828">' + e.removed + '</td><td style="color:#1565c0">' + e.moved_in + '</td><td style="color:#e65100">' + e.moved_out + '</td><td class="' + cls + '">' + sign + net + '</td><td>' + e.titleChanged + '</td><td>' + e.nameChanged + '</td></tr>'; }); var tNet = tA - tR + tI - tO, tCls = tNet > 0 ? 'net-positive' : (tNet < 0 ? 'net-negative' : 'net-zero'), tSign = tNet > 0 ? '+' : ''; h += '<tr style="background:#f3e5f5;font-weight:700"><td>TOTAL</td><td style="color:#2e7d32">' + tA + '</td><td style="color:#c62828">' + tR + '</td><td style="color:#1565c0">' + tI + '</td><td style="color:#e65100">' + tO + '</td><td class="' + tCls + '">' + tSign + tNet + '</td><td>' + r.titleChanged.length + '</td><td>' + r.nameChanged.length + '</td></tr>'; return h + '</tbody></table>'; }
 
@@ -392,6 +404,9 @@ function renderHeatmapSingleMetric(hmData, divNames, metric) { var colHeaders = 
 function renderHeatmapByTheme(hmData, divNames) { var themePalettes = {'Corporate Citizenship':'orange','Strategic Intent':'red','Strategic Development':'blue','Practice':'teal','Service':'orange','Quality':'neutral'}; var maxPerTheme = {}; THEMES.forEach(function(t) { var mx = 0; divNames.forEach(function(d) { var v = hmData[d]['t_' + t] || 0; if (v > mx) mx = v; }); maxPerTheme[t] = mx; }); var gs = 'grid-template-columns: minmax(160px, 1fr) repeat(' + THEMES.length + ', minmax(80px, 1fr))'; var html = '<div class="hm-container"><div class="hm-grid" style="' + gs + '"><div class="hm-corner">Division</div>'; THEMES.forEach(function(t) { html += '<div class="hm-col-hdr" style="background:' + THEME_COLORS[t] + '">' + THEME_ICONS[t] + '<br>' + t + '</div>'; }); divNames.forEach(function(d) { html += '<div class="hm-row-hdr">' + d + '</div>'; THEMES.forEach(function(t) { var val = hmData[d]['t_' + t] || 0; var clr = hmColor(val, maxPerTheme[t], themePalettes[t] || 'neutral'); var clickable = val > 0 ? 'cursor:pointer;' : ''; var onclick = val > 0 ? ' onclick="drillHeatmap(\'' + esc(d) + '\',\'\',\'' + esc(t) + '\')"' : ''; html += '<div class="hm-cell" style="background:' + clr.bg + ';color:' + clr.fg + ';' + clickable + '" title="' + d + ' — ' + t + ': ' + val + '"' + onclick + '><span class="hm-val">' + val + '</span></div>'; }); }); html += '<div class="hm-row-hdr" style="font-weight:700;background:#f3e5f5">TOTAL</div>'; THEMES.forEach(function(t) { var total = 0; divNames.forEach(function(d) { total += hmData[d]['t_' + t] || 0; }); var onclick = total > 0 ? ' onclick="drillHeatmap(\'\',\'\',\'' + esc(t) + '\')" style="background:#f3e5f5;color:var(--purple-dark);font-weight:700;border:1px solid var(--purple-light);cursor:pointer"' : ' style="background:#f3e5f5;color:var(--purple-dark);font-weight:700;border:1px solid var(--purple-light)"'; html += '<div class="hm-cell"' + onclick + '><span class="hm-val">' + total + '</span></div>'; }); return html + '</div></div>'; }
 function setHeatmapMetric(metric) { HEATMAP_METRIC = metric; if (COMPARISON) renderHeatmapTab(COMPARISON); }
 
+/* ================================================================
+   HEATMAP DRILL-DOWN
+   ================================================================ */
 function drillHeatmap(divName, changeType, themeName) {
     if (!COMPARISON) return; var panel = document.getElementById('hm-drill-panel'); if (!panel) return;
     var filtered = COMPARISON.all.filter(function(c) { var row = c.row || c.newRow; if (divName && row.business_unit_name !== divName) return false; if (changeType && changeType !== 'total' && c.type !== changeType) return false; if (themeName && row.theme_of_work !== themeName) return false; return true; });
@@ -454,7 +469,7 @@ function drillNWCByDivision(divName) {
     var panel = document.getElementById('nwc-drill-panel'); if (!panel) return;
     var rows = getNWCFilteredRows(NEW_RAW).filter(function(r) { return !divName || r.business_unit_name === divName; });
     NWC_DRILL_ROWS = rows.slice();
-    var titlesObj = {}; rows.forEach(function(r) { var jt = (r.job_title || r.position_description || '').trim(); if (jt) titlesObj[jt] = true; }); var titles = Object.keys(titlesObj).sort()
+    var titlesObj = {}; rows.forEach(function(r) { var jt = (r.job_title || r.position_description || '').trim(); if (jt) titlesObj[jt] = true; }); var titles = Object.keys(titlesObj).sort();
     var hdr = divName ? ('📁 ' + divName) : '📁 All Divisions';
     var html = '<hr class="sep"><div style="border:2px solid var(--purple-light);border-radius:10px;overflow:hidden;background:#fff">';
     html += '<div style="background:linear-gradient(135deg,var(--purple-dark),var(--purple-mid));color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:1.05rem">🔎</span><span style="font-weight:800;font-size:0.9rem">Contractor Drill-Down</span><span style="background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:12px;font-size:0.72rem;font-weight:800">' + rows.length + ' people</span></div><button onclick="closeNWCDrill()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700">✕ Close</button></div>';
@@ -574,8 +589,29 @@ function buildToolbarHtml(id, divList) { var opts = divList.sort().map(function(
    CEO / EGM / DIV DATA BUILDERS
    ================================================================ */
 function findCEO(data) { for (var i = 0; i < data.length; i++) { var jt = (data[i].job_title || '').toLowerCase(); if (jt.indexOf('chief executive officer') !== -1 || jt.indexOf('managing director & ceo') !== -1 || jt === 'ceo' || (jt.indexOf('chief executive') !== -1 && jt.indexOf('officer') !== -1)) return data[i].full_name; } for (var j = 0; j < data.length; j++) { if ((data[j].job_title || '').toLowerCase().indexOf('chief executive') !== -1) return data[j].full_name; } return ''; }
-function buildEGMData(data) { var filtered = getFilteredData(data), ceo = findCEO(data); var si = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Intent'; }); var sd = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Development'; }); var divMap = {}; si.forEach(function(r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:r.full_name, peopleSet:new Set(), bus:{}}; divMap[dn].leader = r.full_name; }); filtered.filter(isRelevantTheme).forEach(function(r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', peopleSet:new Set(), bus:{}}; if (r.full_name) divMap[dn].peopleSet.add(r.full_name); }); sd.forEach(function(r) { var dn = r.business_unit_name, bn = r.division_name; if (!dn || !bn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', peopleSet:new Set(), bus:{}}; if (!divMap[dn].bus[bn]) divMap[dn].bus[bn] = {name:bn, person:r.full_name}; }); return {ceo:ceo, divisions:divMap}; }
-function buildDivDetailData(data) { var filtered = getFilteredData(data); var si = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Intent'; }); var sd = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Development'; }); var pr = filtered.filter(function(r) { return r.theme_of_work === 'Practice'; }); var divMap = {}; si.forEach(function(r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', egms:{}}; divMap[dn].leader = r.full_name; }); sd.forEach(function(r) { var dn = r.business_unit_name, en = r.division_name; if (!dn || !en) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', egms:{}}; if (!divMap[dn].egms[en]) divMap[dn].egms[en] = {name:en, person:r.full_name, practices:{}}; }); pr.forEach(function(r) { var dn = r.business_unit_name, en = r.division_name, pn = r.department_name || r.division_name, per = r.full_name; if (!dn || !en) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', egms:{}}; if (!divMap[dn].egms[en]) divMap[dn].egms[en] = {name:en, person:'', practices:{}}; if (!divMap[dn].egms[en].practices[pn]) divMap[dn].egms[en].practices[pn] = {name:pn, people:new Set()}; if (per) divMap[dn].egms[en].practices[pn].people.add(per); }); return divMap; }
+
+function buildEGMData(data) {
+    var filtered = getFilteredData(data), ceo = findCEO(data);
+    var si = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Intent'; });
+    var sd = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Development'; });
+    var divMap = {};
+    si.forEach(function(r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:r.full_name, peopleSet:new Set(), bus:{}}; divMap[dn].leader = r.full_name; });
+    filtered.filter(isRelevantTheme).forEach(function(r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', peopleSet:new Set(), bus:{}}; if (r.full_name) divMap[dn].peopleSet.add(r.full_name); });
+    sd.forEach(function(r) { var dn = r.business_unit_name, bn = r.division_name; if (!dn || !bn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', peopleSet:new Set(), bus:{}}; if (!divMap[dn].bus[bn]) divMap[dn].bus[bn] = {name:bn, person:r.full_name}; });
+    return {ceo:ceo, divisions:divMap};
+}
+
+function buildDivDetailData(data) {
+    var filtered = getFilteredData(data);
+    var si = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Intent'; });
+    var sd = filtered.filter(function(r) { return r.theme_of_work === 'Strategic Development'; });
+    var pr = filtered.filter(function(r) { return r.theme_of_work === 'Practice'; });
+    var divMap = {};
+    si.forEach(function(r) { var dn = r.business_unit_name; if (!dn) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', egms:{}}; divMap[dn].leader = r.full_name; });
+    sd.forEach(function(r) { var dn = r.business_unit_name, en = r.division_name; if (!dn || !en) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', egms:{}}; if (!divMap[dn].egms[en]) divMap[dn].egms[en] = {name:en, person:r.full_name, practices:{}}; });
+    pr.forEach(function(r) { var dn = r.business_unit_name, en = r.division_name, pn = r.department_name || r.division_name, per = r.full_name; if (!dn || !en) return; if (!divMap[dn]) divMap[dn] = {name:dn, leader:'', egms:{}}; if (!divMap[dn].egms[en]) divMap[dn].egms[en] = {name:en, person:'', practices:{}}; if (!divMap[dn].egms[en].practices[pn]) divMap[dn].egms[en].practices[pn] = {name:pn, people:new Set()}; if (per) divMap[dn].egms[en].practices[pn].people.add(per); });
+    return divMap;
+}
 
 /* ================================================================
    MODAL
@@ -585,22 +621,53 @@ function closeModal() { document.getElementById('detailModal').classList.remove(
 document.getElementById('detailModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
 function statusBadgeHtml(status) { var labels = {'new':'New','removed':'Departed','changed':'Changed','unchanged':'Unchanged','title_changed':'Title Changed','name_changed':'Name Changed'}; return '<span class="modal-badge st-' + status + '">' + (labels[status] || status) + '</span>'; }
-function buildPersonChangeMap(divName, buName) { var map = {}; if (!COMPARISON) return map; COMPARISON.all.forEach(function(c) { var row = c.row || c.newRow, oldRow = c.oldRow || null, inScope = false; if (divName && buName) { if (row.business_unit_name === divName && row.division_name === buName) inScope = true; if (oldRow && oldRow.business_unit_name === divName && oldRow.division_name === buName) inScope = true; } else if (divName) { if (row.business_unit_name === divName) inScope = true; if (oldRow && oldRow.business_unit_name === divName) inScope = true; } if (!inScope) return; var name = row.full_name; if (name && !map[name]) map[name] = {type:c.type, change:c}; if (c.type === 'name_changed' && oldRow && oldRow.full_name && !map[oldRow.full_name]) { map[oldRow.full_name] = {type:'name_changed', change:c}; } }); return map; }
+
+function buildPersonChangeMap(divName, buName) {
+    var map = {};
+    if (!COMPARISON) return map;
+    COMPARISON.all.forEach(function(c) {
+        var row = c.row || c.newRow, oldRow = c.oldRow || null, inScope = false;
+        if (divName && buName) { if (row.business_unit_name === divName && row.division_name === buName) inScope = true; if (oldRow && oldRow.business_unit_name === divName && oldRow.division_name === buName) inScope = true; }
+        else if (divName) { if (row.business_unit_name === divName) inScope = true; if (oldRow && oldRow.business_unit_name === divName) inScope = true; }
+        if (!inScope) return;
+        var name = row.full_name;
+        if (name && !map[name]) map[name] = {type:c.type, change:c};
+        if (c.type === 'name_changed' && oldRow && oldRow.full_name && !map[oldRow.full_name]) { map[oldRow.full_name] = {type:'name_changed', change:c}; }
+    });
+    return map;
+}
+
 function treeLegendHtml() { return '<div class="modal-tree-legend"><span><span class="ml-dot" style="background:#4caf50"></span> New</span><span><span class="ml-dot" style="background:#f44336"></span> Departed</span><span><span class="ml-dot" style="background:#ff9800"></span> Moved</span><span><span class="ml-dot" style="background:#009688"></span> Title Changed</span><span><span class="ml-dot" style="background:#7b1fa2"></span> Name Changed</span></div>'; }
 
 function buildHierarchyTree(data, divName, buName, changeMap) {
     var filtered = getFilteredData(data).filter(isRelevantTheme);
     var scoped = buName ? filtered.filter(function(r) { return r.business_unit_name === divName && r.division_name === buName; }) : filtered.filter(function(r) { return r.business_unit_name === divName; });
-    var tree = {}; scoped.forEach(function(r) { var dept = r.department_name || '(No Department)', team = r.team_name || '(No Team)'; if (!tree[dept]) tree[dept] = {}; if (!tree[dept][team]) tree[dept][team] = []; tree[dept][team].push({name:r.full_name, title:r.job_title || '', theme:r.theme_of_work}); });
+    var tree = {};
+    scoped.forEach(function(r) { var dept = r.department_name || '(No Department)', team = r.team_name || '(No Team)'; if (!tree[dept]) tree[dept] = {}; if (!tree[dept][team]) tree[dept][team] = []; tree[dept][team].push({name:r.full_name, title:r.job_title || '', theme:r.theme_of_work}); });
     var oldFiltered = getFilteredData(OLD_DATA).filter(isRelevantTheme);
     var oldScoped = buName ? oldFiltered.filter(function(r) { return r.business_unit_name === divName && r.division_name === buName; }) : oldFiltered.filter(function(r) { return r.business_unit_name === divName; });
     oldScoped.forEach(function(r) { if (!r.full_name) return; var info = changeMap[r.full_name]; if (info && info.type === 'removed') { var dept = r.department_name || '(No Department)', team = r.team_name || '(No Team)'; if (!tree[dept]) tree[dept] = {}; if (!tree[dept][team]) tree[dept][team] = []; if (!tree[dept][team].some(function(p) { return p.name === r.full_name; })) { tree[dept][team].push({name:r.full_name, title:r.job_title || '', theme:r.theme_of_work, isRemoved:true}); } } });
     if (Object.keys(tree).length === 0) return '<p style="color:#999;font-size:0.78rem">No people found.</p>';
     var html = '<div class="modal-tree">'; var badgeLabels = {'new':'NEW','removed':'DEPARTED','moved':'MOVED','title_changed':'TITLE','name_changed':'NAME'};
-    Object.keys(tree).sort().forEach(function(dept) { html += '<div class="tree-node"><div class="tree-label tl-dept">📂 ' + dept + '</div>'; Object.keys(tree[dept]).sort().forEach(function(team) { html += '<div class="tree-node"><div class="tree-label tl-team">👥 ' + team + '</div>'; tree[dept][team].sort(function(a, b) { return a.name.localeCompare(b.name); }).forEach(function(p) { var info = changeMap[p.name], cls = '', badge = '', extra = ''; if (info) { cls = ' tp-' + info.type; badge = ' <span class="tp-badge tpb-' + info.type + '">' + (badgeLabels[info.type] || '') + '</span>'; if (info.type === 'name_changed' && info.change && info.change.oldRow) { extra = ' <span style="font-size:0.65rem;color:#7b1fa2">(was: ' + info.change.oldRow.full_name + ')</span>'; } } html += '<div class="tree-person' + cls + '">' + p.name + (p.title ? ' <span class="modal-job-title">(' + p.title + ')</span>' : '') + badge + extra + '</div>'; }); html += '</div>'; }); html += '</div>'; });
+    Object.keys(tree).sort().forEach(function(dept) {
+        html += '<div class="tree-node"><div class="tree-label tl-dept">📂 ' + dept + '</div>';
+        Object.keys(tree[dept]).sort().forEach(function(team) {
+            html += '<div class="tree-node"><div class="tree-label tl-team">👥 ' + team + '</div>';
+            tree[dept][team].sort(function(a, b) { return a.name.localeCompare(b.name); }).forEach(function(p) {
+                var info = changeMap[p.name], cls = '', badge = '', extra = '';
+                if (info) { cls = ' tp-' + info.type; badge = ' <span class="tp-badge tpb-' + info.type + '">' + (badgeLabels[info.type] || '') + '</span>'; if (info.type === 'name_changed' && info.change && info.change.oldRow) { extra = ' <span style="font-size:0.65rem;color:#7b1fa2">(was: ' + info.change.oldRow.full_name + ')</span>'; } }
+                html += '<div class="tree-person' + cls + '">' + p.name + (p.title ? ' <span class="modal-job-title">(' + p.title + ')</span>' : '') + badge + extra + '</div>';
+            });
+            html += '</div>';
+        });
+        html += '</div>';
+    });
     return html + '</div>';
 }
 
+/* ================================================================
+   MODAL SHOW FUNCTIONS
+   ================================================================ */
 function showCEOModal() {
     var newCEO = findCEO(NEW_DATA), oldCEO = findCEO(OLD_DATA);
     var newTitle = getJobTitle(NEW_DATA, newCEO), oldTitle = getJobTitle(OLD_DATA, oldCEO);
@@ -616,14 +683,18 @@ function showCEOModal() {
 function showDivModal(divName) {
     var newEGM = buildEGMData(NEW_DATA), oldEGM = buildEGMData(OLD_DATA);
     var newDiv = newEGM.divisions[divName] || null, oldDiv = oldEGM.divisions[divName] || null;
-    var status = 'unchanged'; if (newDiv && !oldDiv) status = 'new'; else if (!newDiv && oldDiv) status = 'removed'; else if (newDiv && oldDiv && newDiv.leader !== oldDiv.leader) status = 'changed';
+    var status = 'unchanged';
+    if (newDiv && !oldDiv) status = 'new';
+    else if (!newDiv && oldDiv) status = 'removed';
+    else if (newDiv && oldDiv && oldDiv.leader && !newDiv.leader) status = 'removed';
+    else if (newDiv && oldDiv && newDiv.leader !== oldDiv.leader) status = 'changed';
     var leader = newDiv ? newDiv.leader : (oldDiv ? oldDiv.leader : '');
     var lt = getJobTitleInContext(NEW_DATA, leader, divName, '');
     var empCount = newDiv ? newDiv.peopleSet.size : 0;
     var initials = makeInitials(leader);
     var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div>';
-    html += '<div class="modal-section"><h4>Strategic Intent Leader</h4><div class="modal-person-block"><div class="mpb-avatar">' + initials + '</div><div><div class="mpb-name">' + (leader || 'Unknown') + '</div>' + (lt ? '<div class="modal-job-title">' + lt + '</div>' : '') + '</div></div></div>';
-    if (status === 'changed') { var ol = oldDiv ? oldDiv.leader : '', olt = getJobTitleInContext(OLD_DATA, ol, divName, ''); html += '<div class="modal-section"><h4>Leader Change</h4><div class="modal-change-row"><span class="modal-change-old">' + ol + (olt ? ' (' + olt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + leader + (lt ? ' (' + lt + ')' : '') + '</span></div></div>'; }
+    html += '<div class="modal-section"><h4>Strategic Intent Leader</h4><div class="modal-person-block"><div class="mpb-avatar">' + initials + '</div><div><div class="mpb-name">' + (leader || 'TBC') + '</div>' + (lt ? '<div class="modal-job-title">' + lt + '</div>' : '') + '</div></div></div>';
+    if ((status === 'changed' || status === 'removed') && oldDiv && oldDiv.leader) { var ol = oldDiv.leader, olt = getJobTitleInContext(OLD_DATA, ol, divName, ''); html += '<div class="modal-section"><h4>Leader Change</h4><div class="modal-change-row"><span class="modal-change-old">' + ol + (olt ? ' (' + olt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + (leader || 'TBC') + (lt ? ' (' + lt + ')' : '') + '</span></div></div>'; }
     html += '<div class="modal-section"><h4>Employee Count</h4><span class="modal-people-count">👥 ' + empCount + ' people</span></div>';
     html += '<div class="modal-section"><h4>Hierarchy</h4><div class="modal-breadcrumb"><span class="mbc-item">📁 ' + divName + '</span></div></div>';
     var busObj = newDiv ? newDiv.bus : (oldDiv ? oldDiv.bus : {}), buNames = Object.keys(busObj).sort();
@@ -636,10 +707,10 @@ function showDivModal(divName) {
 function showBUModal(divName, buName, person, status, oldPerson) {
     var pt = getJobTitleInContext(NEW_DATA, person, divName, buName);
     var opt = oldPerson ? getJobTitleInContext(OLD_DATA, oldPerson, divName, buName) : '';
-    var initials = makeInitials(person);
+    var initials = makeInitials(person || oldPerson);
     var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div>';
     html += '<div class="modal-section"><h4>Strategic Development Lead</h4><div class="modal-person-block"><div class="mpb-avatar">' + initials + '</div><div><div class="mpb-name">' + (person || 'TBC') + '</div>' + (pt ? '<div class="modal-job-title">' + pt + '</div>' : '') + '</div></div></div>';
-    if (status === 'changed' && oldPerson) { html += '<div class="modal-section"><h4>Lead Change</h4><div class="modal-change-row"><span class="modal-change-old">' + oldPerson + (opt ? ' (' + opt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + person + (pt ? ' (' + pt + ')' : '') + '</span></div></div>'; }
+    if ((status === 'changed' || status === 'removed') && oldPerson) { html += '<div class="modal-section"><h4>Lead Change</h4><div class="modal-change-row"><span class="modal-change-old">' + oldPerson + (opt ? ' (' + opt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + (person || 'TBC') + (pt ? ' (' + pt + ')' : '') + '</span></div></div>'; }
     html += '<div class="modal-section"><h4>Hierarchy</h4><div class="modal-breadcrumb"><span class="mbc-item">📁 ' + divName + '</span><span class="mbc-sep">›</span><span class="mbc-item">📂 ' + buName + '</span></div></div>';
     var changeMap = buildPersonChangeMap(divName, buName);
     html += '<div class="modal-section"><h4>People</h4>' + treeLegendHtml() + buildHierarchyTree(NEW_DATA, divName, buName, changeMap) + '</div>';
@@ -649,10 +720,10 @@ function showBUModal(divName, buName, person, status, oldPerson) {
 function showEGMModal(divName, egmName, person, status, oldPerson) {
     var pt = getJobTitleInContext(NEW_DATA, person, divName, egmName);
     var opt = oldPerson ? getJobTitleInContext(OLD_DATA, oldPerson, divName, egmName) : '';
-    var initials = makeInitials(person);
+    var initials = makeInitials(person || oldPerson);
     var html = '<div class="modal-section"><h4>Status</h4>' + statusBadgeHtml(status) + '</div>';
     html += '<div class="modal-section"><h4>EGM / Strategic Development Lead</h4><div class="modal-person-block"><div class="mpb-avatar">' + initials + '</div><div><div class="mpb-name">' + (person || 'TBC') + '</div>' + (pt ? '<div class="modal-job-title">' + pt + '</div>' : '') + '</div></div></div>';
-    if (status === 'changed' && oldPerson) { html += '<div class="modal-section"><h4>Lead Change</h4><div class="modal-change-row"><span class="modal-change-old">' + oldPerson + (opt ? ' (' + opt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + person + (pt ? ' (' + pt + ')' : '') + '</span></div></div>'; }
+    if ((status === 'changed' || status === 'removed') && oldPerson) { html += '<div class="modal-section"><h4>Lead Change</h4><div class="modal-change-row"><span class="modal-change-old">' + oldPerson + (opt ? ' (' + opt + ')' : '') + '</span><span class="modal-change-arrow">→</span><span class="modal-change-new">' + (person || 'TBC') + (pt ? ' (' + pt + ')' : '') + '</span></div></div>'; }
     html += '<div class="modal-section"><h4>Hierarchy</h4><div class="modal-breadcrumb"><span class="mbc-item">📁 ' + divName + '</span><span class="mbc-sep">›</span><span class="mbc-item">📂 ' + egmName + '</span></div></div>';
     var changeMap = buildPersonChangeMap(divName, egmName);
     html += '<div class="modal-section"><h4>People</h4>' + treeLegendHtml() + buildHierarchyTree(NEW_DATA, divName, egmName, changeMap) + '</div>';
@@ -676,10 +747,7 @@ function showPracModal(divName, egmName, pracName, peopleArr, status, oldPeopleA
 }
 
 function showPracModalFromAttr(el) {
-    var divName = el.getAttribute('data-div');
-    var egmName = el.getAttribute('data-egm');
-    var pracName = el.getAttribute('data-prac');
-    var status = el.getAttribute('data-status');
+    var divName = el.getAttribute('data-div'), egmName = el.getAttribute('data-egm'), pracName = el.getAttribute('data-prac'), status = el.getAttribute('data-status');
     var peopleArr = [], oldPeopleArr = [];
     try { peopleArr = JSON.parse(el.getAttribute('data-people')); } catch (e) {}
     try { oldPeopleArr = JSON.parse(el.getAttribute('data-old-people')); } catch (e) {}
@@ -693,17 +761,37 @@ function renderEGMChart() {
     var container = document.getElementById('t-egm');
     var newEGM = buildEGMData(NEW_DATA), oldEGM = buildEGMData(OLD_DATA);
     var allDivsObj = {}; Object.keys(newEGM.divisions).forEach(function(k) { allDivsObj[k] = true; }); Object.keys(oldEGM.divisions).forEach(function(k) { allDivsObj[k] = true; }); var allDivs = Object.keys(allDivsObj);
-    var ceoHL = ''; if (newEGM.ceo && oldEGM.ceo && newEGM.ceo !== oldEGM.ceo) ceoHL = 'hl-changed'; else if (newEGM.ceo && !oldEGM.ceo) ceoHL = 'hl-new';
-    var ceoBanner = '<div class="ceo-banner ' + ceoHL + '" onclick="showCEOModal()"><div class="nt">Insurance Australia Group</div><div class="np">(' + (newEGM.ceo || 'Unknown') + ')</div></div>';
+    var ceoHL = '';
+    if (newEGM.ceo && oldEGM.ceo && newEGM.ceo !== oldEGM.ceo) ceoHL = 'hl-changed';
+    else if (newEGM.ceo && !oldEGM.ceo) ceoHL = 'hl-new';
+    else if (!newEGM.ceo && oldEGM.ceo) ceoHL = 'hl-removed';
+    var ceoBanner = '<div class="ceo-banner ' + ceoHL + '" onclick="showCEOModal()"><div class="nt">Insurance Australia Group</div><div class="np">(' + (newEGM.ceo || oldEGM.ceo || 'Unknown') + ')</div></div>';
     var columnsHtml = ''; var currentDivNames = sortDivNames(Object.keys(newEGM.divisions));
+
     currentDivNames.forEach(function(divName) {
-        var divNode = newEGM.divisions[divName]; var oldDiv = oldEGM.divisions[divName] || null; var divHL = ''; if (!oldDiv) divHL = 'hl-new'; else if (oldDiv.leader !== divNode.leader) divHL = 'hl-changed';
-        columnsHtml += '<div class="div-col" data-div="' + divName + '"><div class="div-col-hdr ' + divHL + '" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (divNode.leader || '') + '</div><div class="np" style="opacity:0.7">~' + divNode.peopleSet.size + ' employees</div></div>';
-        Object.keys(divNode.bus).sort().forEach(function(buName) { var buEntry = divNode.bus[buName]; var oldBU = oldDiv ? (oldDiv.bus[buName] || null) : null; var buHL = '', buStatus = 'unchanged', oldPerson = ''; if (!oldBU) { buHL = 'hl-new'; buStatus = 'new'; } else if (oldBU.person !== buEntry.person) { buHL = 'hl-changed'; buStatus = 'changed'; oldPerson = oldBU.person; } columnsHtml += '<div class="egm-bu-box ' + buHL + '" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' + esc(buEntry.person || '') + '\',\'' + buStatus + '\',\'' + esc(oldPerson) + '\')"><div class="nt">' + buName + '</div><div class="np">' + (buEntry.person || '') + '</div></div>'; });
-        if (oldDiv) { Object.keys(oldDiv.bus).sort().forEach(function(buName) { if (divNode.bus[buName]) return; columnsHtml += '<div class="egm-bu-box hl-removed" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' + esc(oldDiv.bus[buName].person || '') + '\',\'removed\',\'\')"><div class="nt">' + buName + '</div><div class="np">DEPARTED</div></div>'; }); }
+        var divNode = newEGM.divisions[divName]; var oldDiv = oldEGM.divisions[divName] || null;
+        var divHL = '';
+        if (!oldDiv) divHL = 'hl-new';
+        else if (oldDiv.leader && !divNode.leader) divHL = 'hl-removed';
+        else if (oldDiv.leader !== divNode.leader) divHL = 'hl-changed';
+
+        columnsHtml += '<div class="div-col" data-div="' + divName + '"><div class="div-col-hdr ' + divHL + '" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (divNode.leader || 'TBC') + '</div><div class="np" style="opacity:0.7">~' + divNode.peopleSet.size + ' employees</div></div>';
+
+        Object.keys(divNode.bus).sort().forEach(function(buName) {
+            var buEntry = divNode.bus[buName]; var oldBU = oldDiv ? (oldDiv.bus[buName] || null) : null;
+            var buHL = '', buStatus = 'unchanged', oldPerson = '';
+            if (!oldBU) { buHL = 'hl-new'; buStatus = 'new'; }
+            else if (oldBU.person && !buEntry.person) { buHL = 'hl-removed'; buStatus = 'removed'; oldPerson = oldBU.person; }
+            else if (oldBU.person !== buEntry.person) { buHL = 'hl-changed'; buStatus = 'changed'; oldPerson = oldBU.person; }
+            columnsHtml += '<div class="egm-bu-box ' + buHL + '" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' + esc(buEntry.person || '') + '\',\'' + buStatus + '\',\'' + esc(oldPerson) + '\')"><div class="nt">' + buName + '</div><div class="np">' + (buEntry.person || 'TBC') + '</div></div>';
+        });
+
+        if (oldDiv) { Object.keys(oldDiv.bus).sort().forEach(function(buName) { if (divNode.bus[buName]) return; columnsHtml += '<div class="egm-bu-box hl-removed" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'\',\'removed\',\'' + esc(oldDiv.bus[buName].person || '') + '\')"><div class="nt">' + buName + '</div><div class="np">' + (oldDiv.bus[buName].person || '') + ' — DEPARTED</div></div>'; }); }
         columnsHtml += '</div>';
     });
-    Object.keys(oldEGM.divisions).sort().forEach(function(divName) { if (newEGM.divisions[divName]) return; if (shouldExclude(divName)) return; var oldDiv = oldEGM.divisions[divName]; columnsHtml += '<div class="div-col hl-removed" data-div="' + divName + '"><div class="div-col-hdr hl-removed" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (oldDiv.leader || '') + ' — DEPARTED</div></div>'; Object.keys(oldDiv.bus).sort().forEach(function(buName) { columnsHtml += '<div class="egm-bu-box hl-removed" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'' + esc(oldDiv.bus[buName].person || '') + '\',\'removed\',\'\')"><div class="nt">' + buName + '</div><div class="np">DEPARTED</div></div>'; }); columnsHtml += '</div>'; });
+
+    Object.keys(oldEGM.divisions).sort().forEach(function(divName) { if (newEGM.divisions[divName]) return; if (shouldExclude(divName)) return; var oldDiv = oldEGM.divisions[divName]; columnsHtml += '<div class="div-col hl-removed" data-div="' + divName + '"><div class="div-col-hdr hl-removed" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (oldDiv.leader || '') + ' — DEPARTED</div></div>'; Object.keys(oldDiv.bus).sort().forEach(function(buName) { columnsHtml += '<div class="egm-bu-box hl-removed" onclick="showBUModal(\'' + esc(divName) + '\',\'' + esc(buName) + '\',\'\',\'removed\',\'' + esc(oldDiv.bus[buName].person || '') + '\')"><div class="nt">' + buName + '</div><div class="np">' + (oldDiv.bus[buName].person || '') + ' — DEPARTED</div></div>'; }); columnsHtml += '</div>'; });
+
     container.innerHTML = '<h2 style="margin-bottom:6px;color:var(--purple-dark)">🏢 Business Unit – Chief Executive &amp; EGM</h2>' + filterBannerHtml() + '<div class="key-box"><div class="key-item"><div class="key-sw" style="background:#c8e6c9;border-color:#4caf50"></div> New</div><div class="key-item"><div class="key-sw" style="background:#ffebee;border-color:#f44336"></div> Departed</div><div class="key-item"><div class="key-sw" style="background:#fff8e1;border-color:#ff9800"></div> Changed</div></div>' + buildToolbarHtml('egm', allDivs) + '<div class="cv-viewport" id="egm-vp"><div class="cv-inner hide-changes" id="egm-inner">' + ceoBanner + '<div class="div-columns">' + columnsHtml + '</div></div></div>';
     canvasZoomLevels['egm'] = 1; if (ACTIVE_DIV_FILTER) chartFilterDiv('egm', ACTIVE_DIV_FILTER);
 }
@@ -716,27 +804,58 @@ function renderDivisionChart() {
     var newDetail = buildDivDetailData(NEW_DATA), oldDetail = buildDivDetailData(OLD_DATA);
     var allDivsObj = {}; Object.keys(newDetail).forEach(function(k) { allDivsObj[k] = true; }); Object.keys(oldDetail).forEach(function(k) { allDivsObj[k] = true; }); var allDivs = Object.keys(allDivsObj);
     var columnsHtml = ''; var sortedDivs = sortDivNames(Object.keys(newDetail));
+
     sortedDivs.forEach(function(divName) {
-        var divNode = newDetail[divName]; var oldDiv = oldDetail[divName] || null; var divHL = ''; if (!oldDiv) divHL = 'hl-new'; else if (oldDiv.leader !== divNode.leader) divHL = 'hl-changed';
-        columnsHtml += '<div class="div-col" data-div="' + divName + '"><div class="div-col-hdr ' + divHL + '" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (divNode.leader || '') + '</div></div>';
+        var divNode = newDetail[divName]; var oldDiv = oldDetail[divName] || null;
+        var divHL = '';
+        if (!oldDiv) divHL = 'hl-new';
+        else if (oldDiv.leader && !divNode.leader) divHL = 'hl-removed';
+        else if (oldDiv.leader !== divNode.leader) divHL = 'hl-changed';
+
+        columnsHtml += '<div class="div-col" data-div="' + divName + '"><div class="div-col-hdr ' + divHL + '" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (divNode.leader || 'TBC') + '</div></div>';
+
         Object.keys(divNode.egms).sort().forEach(function(egmName) {
-            var egmNode = divNode.egms[egmName]; var oldEgm = oldDiv ? (oldDiv.egms[egmName] || null) : null; var egmHL = '', egmStatus = 'unchanged', oldEgmPerson = ''; if (!oldEgm) { egmHL = 'hl-new'; egmStatus = 'new'; } else if (oldEgm.person !== egmNode.person) { egmHL = 'hl-changed'; egmStatus = 'changed'; oldEgmPerson = oldEgm.person; }
-            columnsHtml += '<div class="egm-box"><div class="egm-box-hdr ' + egmHL + '" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(egmNode.person || '') + '\',\'' + egmStatus + '\',\'' + esc(oldEgmPerson) + '\')"><div class="nt">' + egmName + '</div><div class="np">' + (egmNode.person || '') + '</div></div><div class="prac-grid">';
+            var egmNode = divNode.egms[egmName]; var oldEgm = oldDiv ? (oldDiv.egms[egmName] || null) : null;
+            var egmHL = '', egmStatus = 'unchanged', oldEgmPerson = '';
+            if (!oldEgm) { egmHL = 'hl-new'; egmStatus = 'new'; }
+            else if (oldEgm.person && !egmNode.person) { egmHL = 'hl-removed'; egmStatus = 'removed'; oldEgmPerson = oldEgm.person; }
+            else if (oldEgm.person !== egmNode.person) { egmHL = 'hl-changed'; egmStatus = 'changed'; oldEgmPerson = oldEgm.person; }
+
+            columnsHtml += '<div class="egm-box"><div class="egm-box-hdr ' + egmHL + '" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(egmNode.person || '') + '\',\'' + egmStatus + '\',\'' + esc(oldEgmPerson) + '\')"><div class="nt">' + egmName + '</div><div class="np">' + (egmNode.person || 'TBC') + '</div></div><div class="prac-grid">';
+
             Object.keys(egmNode.practices).sort().forEach(function(pracName) {
-                var pracEntry = egmNode.practices[pracName]; var oldPrac = oldEgm ? (oldEgm.practices[pracName] || null) : null; var pracHL = '', pracStatus = 'unchanged', oldPeopleArr = [];
-                if (!oldPrac) { pracHL = 'hl-new'; pracStatus = 'new'; } else if (!setsEqual(oldPrac.people, pracEntry.people)) { pracHL = 'hl-changed'; pracStatus = 'changed'; oldPeopleArr = Array.from(oldPrac.people); }
+                var pracEntry = egmNode.practices[pracName]; var oldPrac = oldEgm ? (oldEgm.practices[pracName] || null) : null;
+                var pracHL = '', pracStatus = 'unchanged', oldPeopleArr = [];
+                if (!oldPrac) { pracHL = 'hl-new'; pracStatus = 'new'; }
+                else if (!setsEqual(oldPrac.people, pracEntry.people)) { pracHL = 'hl-changed'; pracStatus = 'changed'; oldPeopleArr = Array.from(oldPrac.people); }
                 var peopleArr = Array.from(pracEntry.people);
                 var pj = JSON.stringify(peopleArr).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
                 var opj = JSON.stringify(oldPeopleArr).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
                 columnsHtml += '<div class="prac-box ' + pracHL + '" onclick="showPracModalFromAttr(this)" data-div="' + escAttr(divName) + '" data-egm="' + escAttr(egmName) + '" data-prac="' + escAttr(pracName) + '" data-people="' + pj + '" data-status="' + pracStatus + '" data-old-people="' + opj + '"><div class="nt">' + pracEntry.name + '</div><div class="np">' + formatPeopleSet(pracEntry.people) + '</div></div>';
             });
+
             if (oldEgm) { Object.keys(oldEgm.practices).sort().forEach(function(pracName) { if (egmNode.practices[pracName]) return; var oldPrac = oldEgm.practices[pracName]; var opArr = Array.from(oldPrac.people); var opj = JSON.stringify(opArr).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" data-div="' + escAttr(divName) + '" data-egm="' + escAttr(egmName) + '" data-prac="' + escAttr(pracName) + '" data-people="[]" data-status="removed" data-old-people="' + opj + '"><div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>'; }); }
             columnsHtml += '</div></div>';
         });
+
         if (oldDiv) { Object.keys(oldDiv.egms).sort().forEach(function(egmName) { if (divNode.egms[egmName]) return; var oldEgm = oldDiv.egms[egmName]; columnsHtml += '<div class="egm-box"><div class="egm-box-hdr hl-removed" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(oldEgm.person || '') + '\',\'removed\',\'\')"><div class="nt">' + egmName + '</div><div class="np">' + (oldEgm.person || '') + ' — DEPARTED</div></div>'; var pk = Object.keys(oldEgm.practices); if (pk.length > 0) { columnsHtml += '<div class="prac-grid">'; pk.sort().forEach(function(pracName) { var oldPrac = oldEgm.practices[pracName]; var opArr = Array.from(oldPrac.people); var opj = JSON.stringify(opArr).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" data-div="' + escAttr(divName) + '" data-egm="' + escAttr(egmName) + '" data-prac="' + escAttr(pracName) + '" data-people="[]" data-status="removed" data-old-people="' + opj + '"><div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>'; }); columnsHtml += '</div>'; } columnsHtml += '</div>'; }); }
         columnsHtml += '</div>';
     });
-    Object.keys(oldDetail).sort().forEach(function(divName) { if (newDetail[divName]) return; if (shouldExclude(divName)) return; var oldDiv = oldDetail[divName]; columnsHtml += '<div class="div-col hl-removed" data-div="' + divName + '"><div class="div-col-hdr hl-removed" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (oldDiv.leader || '') + ' — DEPARTED</div></div>'; Object.keys(oldDiv.egms).sort().forEach(function(egmName) { var oldEgm = oldDiv.egms[egmName]; columnsHtml += '<div class="egm-box"><div class="egm-box-hdr hl-removed" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(oldEgm.person || '') + '\',\'removed\',\'\')"><div class="nt">' + egmName + '</div><div class="np">' + (oldEgm.person || '') + '</div></div>'; var pk = Object.keys(oldEgm.practices); if (pk.length > 0) { columnsHtml += '<div class="prac-grid">'; pk.sort().forEach(function(pracName) { var oldPrac = oldEgm.practices[pracName]; var opArr = Array.from(oldPrac.people); var opj = JSON.stringify(opArr).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" data-div="' + escAttr(divName) + '" data-egm="' + escAttr(egmName) + '" data-prac="' + escAttr(pracName) + '" data-people="[]" data-status="removed" data-old-people="' + opj + '"><div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>'; }); columnsHtml += '</div>'; } columnsHtml += '</div>'; }); columnsHtml += '</div>'; });
+
+    Object.keys(oldDetail).sort().forEach(function(divName) {
+        if (newDetail[divName]) return; if (shouldExclude(divName)) return;
+        var oldDiv = oldDetail[divName];
+        columnsHtml += '<div class="div-col hl-removed" data-div="' + divName + '"><div class="div-col-hdr hl-removed" onclick="showDivModal(\'' + esc(divName) + '\')"><div class="nt">' + divName + '</div><div class="np">' + (oldDiv.leader || '') + ' — DEPARTED</div></div>';
+        Object.keys(oldDiv.egms).sort().forEach(function(egmName) {
+            var oldEgm = oldDiv.egms[egmName];
+            columnsHtml += '<div class="egm-box"><div class="egm-box-hdr hl-removed" onclick="showEGMModal(\'' + esc(divName) + '\',\'' + esc(egmName) + '\',\'' + esc(oldEgm.person || '') + '\',\'removed\',\'\')"><div class="nt">' + egmName + '</div><div class="np">' + (oldEgm.person || '') + '</div></div>';
+            var pk = Object.keys(oldEgm.practices);
+            if (pk.length > 0) { columnsHtml += '<div class="prac-grid">'; pk.sort().forEach(function(pracName) { var oldPrac = oldEgm.practices[pracName]; var opArr = Array.from(oldPrac.people); var opj = JSON.stringify(opArr).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); columnsHtml += '<div class="prac-box hl-removed" onclick="showPracModalFromAttr(this)" data-div="' + escAttr(divName) + '" data-egm="' + escAttr(egmName) + '" data-prac="' + escAttr(pracName) + '" data-people="[]" data-status="removed" data-old-people="' + opj + '"><div class="nt">' + oldPrac.name + '</div><div class="np">DEPARTED</div></div>'; }); columnsHtml += '</div>'; }
+            columnsHtml += '</div>';
+        });
+        columnsHtml += '</div>';
+    });
+
     container.innerHTML = '<h2 style="margin-bottom:6px;color:var(--purple-dark)">🏗️ Division EGMs &amp; EMs</h2>' + filterBannerHtml() + '<div class="key-box"><div class="key-item"><div class="key-sw" style="background:#c8e6c9;border-color:#4caf50"></div> New</div><div class="key-item"><div class="key-sw" style="background:#ffebee;border-color:#f44336"></div> Departed</div><div class="key-item"><div class="key-sw" style="background:#fff8e1;border-color:#ff9800"></div> Changed</div></div>' + buildToolbarHtml('div', allDivs) + '<div class="cv-viewport" id="div-vp"><div class="cv-inner hide-changes" id="div-inner"><div class="div-columns">' + columnsHtml + '</div></div></div>';
     canvasZoomLevels['div'] = 1; if (ACTIVE_DIV_FILTER) chartFilterDiv('div', ACTIVE_DIV_FILTER);
 }
